@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from .models import RegressionCase, RegressionResult, RunMetadata
 from .redaction import Redactor
+from .trace import Trace
 
 MAX_JSON_BYTES = 1_000_000  # per stored case or result
 MAX_LABEL_LENGTH = 64
@@ -63,6 +64,18 @@ MIGRATIONS: list[str] = [
     ALTER TABLE runs ADD COLUMN stdout_truncated INTEGER CHECK (stdout_truncated IN (0, 1));
     ALTER TABLE runs ADD COLUMN stderr_truncated INTEGER CHECK (stderr_truncated IN (0, 1));
     """,
+    # v3: raw traces. Stored REDACTED (secrets never reach the disk); `redacted` records whether
+    # redaction changed anything. Traces are independent of cases and runs.
+    """
+    CREATE TABLE traces (
+        trace_id   TEXT PRIMARY KEY,
+        trace_json TEXT NOT NULL,
+        trace_hash TEXT NOT NULL,
+        redacted   INTEGER NOT NULL CHECK (redacted IN (0, 1)),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 
@@ -72,6 +85,10 @@ class StorageError(Exception):
 
 
 class CaseExistsError(StorageError):
+    pass
+
+
+class TraceExistsError(StorageError):
     pass
 
 
@@ -253,6 +270,63 @@ class Repository:
         self._conn.commit()
         if cur.rowcount == 0:
             raise NotFoundError(f"Case '{case_id}' not found")
+
+    # ---- traces ------------------------------------------------------------------
+    def save_trace(self, trace: Trace, *, overwrite: bool = False) -> tuple[str, bool]:
+        """Store a trace after redaction. Returns ``(content hash, whether anything was redacted)``."""
+        original = trace.model_dump(mode="json")
+        safe = Redactor().value(original)
+        redacted = safe != original
+        try:
+            stored = Trace.model_validate(safe)
+        except ValidationError:
+            raise StorageError("trace cannot be stored: redaction changed its shape") from None
+        payload = json.dumps(
+            stored.model_dump(mode="json"), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        )
+        _check_size(payload, "trace")
+        digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        now = _now()
+        exists = self._conn.execute(
+            "SELECT 1 FROM traces WHERE trace_id = ?", (trace.trace_id,)
+        ).fetchone()
+        if exists and not overwrite:
+            raise TraceExistsError(f"Trace '{trace.trace_id}' already exists")
+        if exists:
+            self._conn.execute(
+                "UPDATE traces SET trace_json=?, trace_hash=?, redacted=?, updated_at=?"
+                " WHERE trace_id=?",
+                (payload, digest, int(redacted), now, trace.trace_id),
+            )
+        else:
+            self._conn.execute(
+                "INSERT INTO traces(trace_id, trace_json, trace_hash, redacted, created_at,"
+                " updated_at) VALUES (?,?,?,?,?,?)",
+                (trace.trace_id, payload, digest, int(redacted), now, now),
+            )
+        self._conn.commit()
+        return digest, redacted
+
+    def get_trace(self, trace_id: str) -> Trace:
+        row = self._conn.execute(
+            "SELECT trace_json FROM traces WHERE trace_id = ?", (trace_id,)
+        ).fetchone()
+        if row is None:
+            raise NotFoundError(f"Trace '{trace_id}' not found")
+        try:
+            return Trace.model_validate_json(row[0])
+        except ValidationError:
+            raise StorageError(f"Stored trace '{trace_id}' is corrupt") from None
+
+    def list_trace_ids(self) -> list[str]:
+        rows = self._conn.execute("SELECT trace_id FROM traces ORDER BY trace_id").fetchall()
+        return [r[0] for r in rows]
+
+    def delete_trace(self, trace_id: str) -> None:
+        cur = self._conn.execute("DELETE FROM traces WHERE trace_id = ?", (trace_id,))
+        self._conn.commit()
+        if cur.rowcount == 0:
+            raise NotFoundError(f"Trace '{trace_id}' not found")
 
     # ---- runs --------------------------------------------------------------------
     def record_run(

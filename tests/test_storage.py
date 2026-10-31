@@ -32,7 +32,7 @@ def run(case):
 
 def test_new_database_is_migrated_to_current_version():
     with Repository() as repo:
-        assert repo.schema_version == SCHEMA_VERSION == 2
+        assert repo.schema_version == SCHEMA_VERSION == 3
 
 
 def test_case_roundtrip_and_hash_is_stable():

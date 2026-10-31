@@ -17,7 +17,7 @@ _[x] = done AND verified by an executed check (see TEST_EVIDENCE.md). Local-only
 - [x] Save cases and runs (with case hash and result JSON).
 - [x] Rerun + assertion-based before/after comparison.
 - [x] Tests: persistence across connections, hash stability, history immutability, size limits, injection-like ids, corrupt/newer DB.
-- [x] Trace model + `case from-trace` (trace file -> reviewable case; session 8). [ ] Persist raw traces in the DB (needs schema v3) and trace capture/import from real frameworks.
+- [x] Trace model + `case from-trace` (trace file -> reviewable case; session 8). [x] Raw traces persisted in the DB (schema v3, redacted before storage; `trace add/list/show/delete`, `case from-trace --stored`; D-017) and trace capture/import from real frameworks.
 - [x] Reports: `report` command renders a deterministic, timestamp-free Markdown/JSON report from two runs to stdout (golden-file + injection tests).
 - [x] `report --output PATH [--force]` writes the report to a file (refuses to overwrite without `--force`).
 - [x] Migration test with a real v1 -> v2 upgrade (session 7: data preserved, newer/negative/foreign/corrupt/failed-migration cases; see TEST_EVIDENCE.md).

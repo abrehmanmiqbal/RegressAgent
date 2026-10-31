@@ -125,7 +125,9 @@ def case_from_trace(
             found, value = _resolve_path(trace.output, path) if path else (False, None)
             if not found:
                 raise TraceError(f"path '{path}' not found in the trace output")
-            if _is_secret_like(redacted_output, trace.output, path, value):
+            if (
+                isinstance(value, str) and "[REDACTED" in value
+            ) or _is_secret_like(redacted_output, trace.output, path, value):
                 raise TraceError(
                     f"path '{path}' looks like a secret (or contains one); refusing to store it"
                 )
@@ -138,6 +140,8 @@ def case_from_trace(
                 notes.append(f"skipped '{path[:40]}...': path longer than {MAX_PATH_LENGTH} chars")
             elif problem:
                 notes.append(f"skipped '{path}': {problem}")
+            elif isinstance(value, str) and "[REDACTED" in value:
+                notes.append(f"skipped '{path}': value was redacted when the trace was stored")
             elif _is_secret_like(redacted_output, trace.output, path, value):
                 notes.append(f"skipped '{path}': looks like a secret (redaction would change it)")
             elif isinstance(value, str) and len(value) > MAX_EXPECTED_STRING:

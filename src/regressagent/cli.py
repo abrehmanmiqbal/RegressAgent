@@ -28,6 +28,7 @@ from .storage import (
     PayloadTooLargeError,
     Repository,
     StorageError,
+    TraceExistsError,
 )
 from .subprocess_adapter import SubprocessAdapter
 from .trace import MAX_TRACE_BYTES, TraceError, case_from_trace, parse_trace
@@ -59,18 +60,46 @@ def load_case_file(path: str) -> RegressionCase:
         raise CliError(f"Invalid case file: {exc.error_count()} validation error(s): {exc}") from exc
 
 
-def _case_from_trace_file(args: argparse.Namespace):
+def _read_trace_file(path: str):
     try:
-        with Path(args.file).open("rb") as handle:
+        with Path(path).open("rb") as handle:
             raw = handle.read(MAX_TRACE_BYTES + 1)
     except OSError as exc:
         raise CliError(f"Cannot read trace file: {exc.strerror or exc}") from exc
     try:
-        return case_from_trace(
-            parse_trace(raw), case_id=args.case_id, name=args.name, paths=args.paths
-        )
+        return parse_trace(raw)
     except TraceError as exc:
         raise CliError(str(exc)) from exc
+
+
+def _case_from_trace_file(args: argparse.Namespace, repo: Repository | None = None):
+    trace = repo.get_trace(args.file) if args.stored and repo else _read_trace_file(args.file)
+    try:
+        return case_from_trace(trace, case_id=args.case_id, name=args.name, paths=args.paths)
+    except TraceError as exc:
+        raise CliError(str(exc)) from exc
+
+
+def _trace_command(args: argparse.Namespace, repo: Repository) -> None:
+    if args.trace_command == "add":
+        trace = _read_trace_file(args.file)
+        try:
+            digest, redacted = repo.save_trace(trace, overwrite=args.overwrite)
+        except TraceExistsError as exc:
+            raise CliError(f"{exc}; use --overwrite to replace it") from exc
+        _emit(
+            {"saved": True, "trace_id": trace.trace_id, "trace_hash": digest, "redacted": redacted}
+        )
+    elif args.trace_command == "list":
+        _emit(repo.list_trace_ids())
+    elif args.trace_command == "show":
+        _emit(repo.get_trace(args.trace_id).model_dump(mode="json"))
+    else:  # delete
+        repo.get_trace(args.trace_id)  # clean "not found" error first
+        if not args.yes:
+            raise CliError(f"Refusing to delete trace '{args.trace_id}' without --yes")
+        repo.delete_trace(args.trace_id)
+        _emit({"deleted": args.trace_id})
 
 
 def _print_notes(notes: list[str]) -> None:
@@ -239,6 +268,11 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="paths",
         help="Output path to assert on (repeatable). Default: every scalar field.",
     )
+    ft.add_argument(
+        "--stored",
+        action="store_true",
+        help="FILE is the id of a trace stored with 'trace add' instead of a file path.",
+    )
     ft.add_argument("--save", action="store_true", help="Save the case instead of printing it.")
     ft.add_argument("--overwrite", action="store_true", help="With --save: replace an existing case.")
     case.add_parser("list", help="List case ids.")
@@ -248,6 +282,18 @@ def _build_parser() -> argparse.ArgumentParser:
     delete.add_argument("case_id")
     delete.add_argument("--yes", action="store_true", help="Confirm the irreversible deletion.")
 
+    trace_cmd = sub.add_parser("trace", help="Store and inspect raw traces.").add_subparsers(
+        dest="trace_command", required=True
+    )
+    ta = trace_cmd.add_parser("add", help="Validate, redact and store a trace file.")
+    ta.add_argument("file")
+    ta.add_argument("--overwrite", action="store_true", help="Replace an existing trace id.")
+    trace_cmd.add_parser("list", help="List stored trace ids.")
+    ts = trace_cmd.add_parser("show", help="Print a stored (redacted) trace.")
+    ts.add_argument("trace_id")
+    td = trace_cmd.add_parser("delete", help="Delete a stored trace.")
+    td.add_argument("trace_id")
+    td.add_argument("--yes", action="store_true", help="Confirm the deletion.")
     run = sub.add_parser("run", help="Run a saved case and record the result.")
     run.add_argument("case_id")
     run.add_argument("--label", required=True)
@@ -292,7 +338,12 @@ def _build_parser() -> argparse.ArgumentParser:
 def _dispatch(args: argparse.Namespace) -> int:
     if args.command == "demo":
         return _demo()
-    if args.command == "case" and args.case_command == "from-trace" and not args.save:
+    if (
+        args.command == "case"
+        and args.case_command == "from-trace"
+        and not args.save
+        and not args.stored
+    ):
         if args.overwrite:
             raise CliError("--overwrite is only used together with --save")
         case, notes = _case_from_trace_file(args)
@@ -301,12 +352,21 @@ def _dispatch(args: argparse.Namespace) -> int:
         return 0
 
     with Repository(args.db) as repo:
+        if args.command == "trace":
+            _trace_command(args, repo)
+            return 0
         if args.command == "case":
             if args.case_command == "add":
                 digest = repo.save_case(load_case_file(args.file), overwrite=args.overwrite)
                 _emit({"saved": True, "case_hash": digest})
+            elif args.case_command == "from-trace" and not args.save:  # --stored
+                if args.overwrite:
+                    raise CliError("--overwrite is only used together with --save")
+                case, notes = _case_from_trace_file(args, repo)
+                _print_notes(notes)
+                _emit(case.model_dump(mode="json"))
             elif args.case_command == "from-trace":  # --save
-                case, notes = _case_from_trace_file(args)
+                case, notes = _case_from_trace_file(args, repo)
                 try:
                     digest = repo.save_case(case, overwrite=args.overwrite)
                 except CaseExistsError as exc:

@@ -65,6 +65,8 @@ regressagent case from-trace trace.json --path message --path items.0.id --save
 
 By default every scalar field of `output` becomes an `equals` assertion (at most 100; otherwise choose with `--path`). **Review the result:** it pins values exactly, including ones that may legitimately vary (timestamps, ids). Fields are skipped with a `note:` on stderr when the key is empty or contains `.`, the path is over 512 characters, a string is over 1,000 characters, or the value looks like a secret (per the redaction rules; secret values are never copied into a case). A secret-looking value in the trace `input` makes the command fail.
 
+Traces can also be kept in the database: `regressagent trace add trace.json` validates the file and stores it **redacted** (secrets never reach the disk; the reply says `"redacted": true` when something was replaced). Then `regressagent case from-trace TRACE_ID --stored` builds the case from the stored copy; fields that were redacted (including partly redacted strings) are skipped with a note, and stored traces keep their keys sorted, so the generated assertions come out in alphabetical order.
+
 ### Paths
 
 `path` is dot-separated: `echo.tag`, or `items.0.name` for list index 0 (ASCII digits only). A key that itself contains `.` cannot be addressed yet.
@@ -97,7 +99,8 @@ regressagent [--db FILE] <command> ...
 |---|---|
 | `demo` | Runs a built-in case offline; no database needed. Exit 0 if it passes. |
 | `case add FILE [--overwrite]` | Validates and saves a case. Prints `{"saved": true, "case_hash": ...}`. Fails (exit 2) if the id exists unless `--overwrite`. |
-| `case from-trace FILE [--case-id ID] [--name N] [--path P]... [--save [--overwrite]]` | Turns a captured trace into a case (see below). Prints the case JSON (notes about skipped fields go to stderr); with `--save` it stores it instead. |
+| `case from-trace FILE [--stored] [--case-id ID] [--name N] [--path P]... [--save [--overwrite]]` | Turns a captured trace into a case (see below). Prints the case JSON (notes about skipped fields go to stderr); with `--save` it stores it instead. |
+| `trace add FILE [--overwrite]` / `trace list` / `trace show ID` / `trace delete ID --yes` | Store raw traces in the database (after secret redaction), list, print and delete them. `case from-trace ID --stored` builds a case from a stored trace. |
 | `case list` | JSON list of case ids. |
 | `case show CASE_ID` | Prints the saved case. |
 | `case delete CASE_ID --yes` | Deletes the case **and all its runs**. Refuses (exit 2) without `--yes`. |
@@ -108,6 +111,10 @@ regressagent [--db FILE] <command> ...
 | `report BEFORE_ID AFTER_ID [--format markdown\|json] [--output FILE] [--force]` | Deterministic, timestamp-free report (Markdown by default) on stdout. `--output` writes a file instead and refuses to overwrite one without `--force`. Exit 1 if `regressed`. |
 
 Runners (`--runner`): `local` (default; deterministic offline demo agent) and `local-legacy` (same, but with a deliberate greeting bug so you can see a failure turn into a fix). They are demo runners, not real agents.
+
+### Try it with a real (tiny) agent
+
+`examples/agents/greeter_agent.py` (a command agent) and `examples/agents/greeter_http.py` (the same agent over HTTP, `python examples/agents/greeter_http.py [--bug]`) are dependency-free examples. `tests/test_example_agents.py` runs the whole story with them: good run, a "bad deploy" (`GREETER_BUG=1`, or `--bug`), `compare` says `regressed`.
 
 ### Running a real agent: subprocess adapters (Tier A, Linux only)
 

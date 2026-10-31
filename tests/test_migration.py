@@ -94,10 +94,10 @@ def table_columns(path, table):
         conn.close()
 
 
-def test_current_schema_is_v2():
-    assert SCHEMA_VERSION == 2
+def test_current_schema_is_v3():
+    assert SCHEMA_VERSION == 3
     with Repository() as repo:
-        assert repo.schema_version == 2
+        assert repo.schema_version == 3
 
 
 def test_v1_database_is_upgraded_and_data_preserved(tmp_path):
@@ -106,7 +106,7 @@ def test_v1_database_is_upgraded_and_data_preserved(tmp_path):
     assert user_version(path) == 1
 
     with Repository(path) as repo:
-        assert repo.schema_version == 2
+        assert repo.schema_version == 3
         assert repo.get_case("c1") == case
         runs = repo.list_runs("c1")
         assert [r.run_id for r in runs] == [1, 2]
@@ -117,7 +117,8 @@ def test_v1_database_is_upgraded_and_data_preserved(tmp_path):
         # Old runs have no adapter metadata; that must read back as None, not a made-up value.
         assert all(r.metadata is None for r in runs)
 
-    assert user_version(path) == 2
+    assert user_version(path) == 3
+    assert "trace_json" in table_columns(path, "traces")
     cols = table_columns(path, "runs")
     for name in ("adapter_name", "executable_sha256", "argv_json", "env_names_json", "exit_code",
                  "duration_ms", "stdout_truncated", "stderr_truncated"):
@@ -155,7 +156,7 @@ def test_upgraded_database_accepts_new_runs_with_metadata_and_keeps_old_ones(tmp
         assert repo.get_run(new_id).metadata == meta
         assert repo.get_run(1).metadata is None
     with Repository(path) as repo:  # reopening an already-v2 file is a no-op
-        assert repo.schema_version == 2
+        assert repo.schema_version == 3
         assert repo.get_run(3).metadata == meta
         assert len(repo.list_runs("c1")) == 3
 
@@ -338,9 +339,30 @@ def test_version_bump_happens_inside_the_migration_transaction(tmp_path, monkeyp
 
     monkeypatch.setattr(storage.sqlite3, "connect", tracing_connect)
     with Repository(path) as repo:
-        assert repo.schema_version == 2
+        assert repo.schema_version == 3
     flat = [s.strip().rstrip(";").strip().upper() for s in statements]
     bump = next(i for i, s in enumerate(flat) if s.startswith("PRAGMA USER_VERSION = 2"))
     begin = next(i for i, s in enumerate(flat) if s == "BEGIN")
     commit = next(i for i, s in enumerate(flat) if s == "COMMIT")
     assert begin < bump < commit
+
+
+def test_v2_database_is_upgraded_to_v3_and_data_preserved(tmp_path):
+    from regressagent.storage import MIGRATIONS
+
+    path = tmp_path / "v2.db"
+    case, _result = build_v1_db(path)  # a v1 file with one case and two runs
+    conn = sqlite3.connect(path)
+    conn.executescript(MIGRATIONS[1])  # -> v2 (adapter metadata columns)
+    conn.execute("PRAGMA user_version = 2")
+    conn.commit()
+    conn.close()
+    assert user_version(path) == 2
+    assert "traces" not in {r[0] for r in sqlite3.connect(path).execute("SELECT name FROM sqlite_master")}
+
+    with Repository(path) as repo:
+        assert repo.schema_version == 3
+        assert repo.get_case("c1") == case
+        assert [r.run_id for r in repo.list_runs("c1")] == [1, 2]
+        assert repo.list_trace_ids() == []
+    assert user_version(path) == 3
