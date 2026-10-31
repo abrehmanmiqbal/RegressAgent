@@ -26,8 +26,8 @@ dependencies = ["pydantic>=2.6,<3"]
 dev = ["pytest>=8,<9", "ruff>=0.4"]
 
 [project.urls]
-Repository = "https://github.com/abrehmanmiqbal/AgentProof"
-Documentation = "https://github.com/abrehmanmiqbal/AgentProof/tree/main/docs"
+Repository = "https://github.com/abrehmanmiqbal/RegressAgent"
+Documentation = "https://github.com/abrehmanmiqbal/RegressAgent/tree/main/docs"
 
 [project.scripts]
 regressagent = "regressagent.cli:main"

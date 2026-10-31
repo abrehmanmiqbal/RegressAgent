@@ -32,7 +32,7 @@ def test_classifiers_cover_the_ci_matrix():
 
 
 def test_project_urls_point_at_the_repository():
-    assert META["urls"]["Repository"] == "https://github.com/abrehmanmiqbal/AgentProof"
+    assert META["urls"]["Repository"] == "https://github.com/abrehmanmiqbal/RegressAgent"
     assert META["urls"]["Documentation"].startswith(META["urls"]["Repository"])
 
 

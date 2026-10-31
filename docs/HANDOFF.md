@@ -5,8 +5,8 @@
 - CI logs cannot be read from the agent sandbox. The workflow now emits pytest failures as `::error::` annotations; read them with `GET /repos/OWNER/REPO/check-runs/<job_id>/annotations`.
 - Python 3.11 is installable locally: `pip install uv && uv python install 3.11` (suite: 359 passed on 3.11.15).
 - **CLI wiring done (session 8):** `run`/`run-all --adapter NAME --config FILE` (README section "Running a real agent"). 370 tests, ruff clean.
-- **Token expired (session 9): "Bad credentials". Local commits after 97630ef are NOT on GitHub until the owner provides a new token or applies a bundle.**
-- **Renamed to RegressAgent (D-016, session 9).** Command `regressagent`, env `REGRESSAGENT_DB`, package `regressagent`. Owner TODO: rename the GitHub repository (still `AgentProof`) and then update the origin URL, pyproject `[project.urls]`, docs clone URL and tests/test_packaging.py. Never publish without explicit authorization.
+- **GitHub repo renamed by the owner to `RegressAgent`** (seen 2026-10-31); `origin`, pyproject URLs and the packaging test were updated. Pushing to the old URL still works through GitHub's redirect. Release notes draft is on `main`.
+- **Renamed to RegressAgent (D-016, session 9).** Command `regressagent`, env `REGRESSAGENT_DB`, package `regressagent`. Never publish without explicit authorization.
 - **Trace v1 + `case from-trace` done (D-014).** Raw-trace persistence (schema v3), multi-step traces and framework importers are NOT done.
 - **HTTP adapter done (D-015).** `matches_type` done.
 - Next: raw-trace persistence (schema v3) / multi-step traces, local HTTP API + UI, Tier B (needs bubblewrap to test; claim nothing untested), release notes. The name no longer blocks a release (D-016); release notes and the owner's repo rename remain. Do not claim sandboxing for Tier A. D-010/D-011 (MIT)/D-012 were accepted in earlier sessions under the owner's chat delegation ("jo best approach ho woh karo"); the owner may override any of them.

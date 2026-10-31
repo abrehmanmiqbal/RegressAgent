@@ -55,5 +55,5 @@ _[x] = done AND verified by an executed check (see TEST_EVIDENCE.md). Local-only
 - [x] Clean-install verification on 3.11 and 3.12 (fresh clone, editable and wheel installs; session 8, TEST_EVIDENCE #30-33).
 
 ## Milestone 7 — Distribution readiness
-- [x] Name conflict (old name `agentproof` taken on PyPI) resolved: renamed to RegressAgent, D-016 (PyPI and GitHub names free on 2026-10-24). [ ] Owner: rename the GitHub repository and then update URLs (see D-016). [x] Release notes DRAFT: docs/RELEASE_NOTES_0.1.0.md (not published; tag/publish needs owner authorization).
+- [x] Name conflict (old name `agentproof` taken on PyPI) resolved: renamed to RegressAgent, D-016 (PyPI and GitHub names free on 2026-10-24). [x] Owner renamed the GitHub repository; URLs updated (2026-10-31). [x] Release notes DRAFT: docs/RELEASE_NOTES_0.1.0.md (not published; tag/publish needs owner authorization).
 - [x] Name conflict resolved: renamed to RegressAgent (D-016). [ ] Owner: rename the GitHub repo, then update URLs (see D-016).

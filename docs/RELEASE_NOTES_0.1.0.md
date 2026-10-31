@@ -1,6 +1,6 @@
 # RegressAgent 0.1.0 (DRAFT, not published)
 
-Status: **DRAFT.** Nothing has been published to PyPI or released on GitHub; that needs the owner's explicit go-ahead. The GitHub repository is still named `AgentProof` until the owner renames it (D-016). Numbers below were measured on 2026-10-24 and are recorded in `docs/TEST_EVIDENCE.md`.
+Status: **DRAFT.** Nothing has been published to PyPI or released on GitHub; that needs the owner's explicit go-ahead. The GitHub repository was renamed to `RegressAgent` (D-016). Numbers below were measured on 2026-10-24 and are recorded in `docs/TEST_EVIDENCE.md`.
 
 ## What it does
 Offline-first regression testing for AI agents. Capture a behaviour once (a case file, or a trace converted into a case), run it against your agent, record the run, and compare before and after with an assertion-level diff and a report.
