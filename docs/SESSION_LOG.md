@@ -44,3 +44,4 @@
 
 ## 2026-10-24 (session 9)
 - Owner delegated the name; chose RegressAgent (D-016) after PyPI/GitHub checks; renamed package, command, env var, defaults, docs; tests 548 -> 551; wheel and clean-install re-verified on 3.12 and 3.11.
+- Schema v3 trace store (redacted before write), `trace` commands, `case from-trace --stored`, example agents; tests 552 -> 569; found+fixed partial-redaction bug.
