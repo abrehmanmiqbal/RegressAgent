@@ -45,3 +45,13 @@ def test_no_claims_we_cannot_back():
 def test_readme_warns_that_the_old_pypi_name_belongs_to_another_project():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "pip install agentproof" in readme and "different project" in readme
+
+
+def test_release_notes_draft_exists_and_is_honest():
+    notes = (ROOT / "docs" / "RELEASE_NOTES_0.1.0.md").read_text(encoding="utf-8")
+    assert notes.startswith("# RegressAgent 0.1.0")
+    assert "DRAFT" in notes and "not published" in notes.lower()
+    assert "not a sandbox" in notes.lower()  # Tier A must never be oversold
+    assert META["version"] in notes
+    for section in ("## What it does", "## Install", "## Known limitations", "## Security notes"):
+        assert section in notes

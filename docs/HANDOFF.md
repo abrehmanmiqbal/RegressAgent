@@ -5,6 +5,7 @@
 - CI logs cannot be read from the agent sandbox. The workflow now emits pytest failures as `::error::` annotations; read them with `GET /repos/OWNER/REPO/check-runs/<job_id>/annotations`.
 - Python 3.11 is installable locally: `pip install uv && uv python install 3.11` (suite: 359 passed on 3.11.15).
 - **CLI wiring done (session 8):** `run`/`run-all --adapter NAME --config FILE` (README section "Running a real agent"). 370 tests, ruff clean.
+- **Token expired (session 9): "Bad credentials". Local commits after 97630ef are NOT on GitHub until the owner provides a new token or applies a bundle.**
 - **Renamed to RegressAgent (D-016, session 9).** Command `regressagent`, env `REGRESSAGENT_DB`, package `regressagent`. Owner TODO: rename the GitHub repository (still `AgentProof`) and then update the origin URL, pyproject `[project.urls]`, docs clone URL and tests/test_packaging.py. Never publish without explicit authorization.
 - **Trace v1 + `case from-trace` done (D-014).** Raw-trace persistence (schema v3), multi-step traces and framework importers are NOT done.
 - **HTTP adapter done (D-015).** `matches_type` done.
