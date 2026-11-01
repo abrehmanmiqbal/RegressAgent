@@ -165,3 +165,5 @@ NOT verified: CI for this commit (see below if recorded); behaviour with very la
 66. Real `compare` output on the demo regression (installed CLI): `message` = still_passing, `steps tool_order` = **regressed** (identical wording, skipped lookup).
 67. Mutation checks: malformed steps ignored for `tool_not_called` -> 1 failed; `tool_order` ignoring order -> 1 failed; step results exposed to assertions -> 1 failed; steps-key conflict check off -> 1 failed; wrong `tool_order` path -> 3 failed; restored.
 NOT verified: CI for this commit (see below if recorded); real framework traces; replay.
+68. CI on 2166bc2 (multi-step traces): jobs `test (3.11)` and `test (3.12)` both success (API).
+69. Path limits, test-first: new tests -> **7 failed, 101 passed**; after the model validator **640 passed** on 3.12.3 and on 3.11.15, `ruff check .` clean; mutation (segment checks off) -> tests failed; restored.

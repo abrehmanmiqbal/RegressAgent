@@ -44,7 +44,7 @@ _[x] = done AND verified by an executed check (see TEST_EVIDENCE.md). Local-only
 ## Milestone 5 — Security and robustness
 - [x] Case files: size cap (1,000,000 bytes), JSON-only parse, typed validation, `extra=forbid`; hostile/malformed/deep-nesting/invalid-UTF-8 probes rejected cleanly.
 - [x] Regex safety (ReDoS): validation at case load, text cap, cost model, fuzzed (D-009). Assertion count capped at 100.
-- [x] Best-effort secret redaction of stored results and run metadata (src/regressagent/redaction.py; limits documented, NOT a guarantee). [ ] Limit assertion depth/path length.
+- [x] Best-effort secret redaction of stored results and run metadata (src/regressagent/redaction.py; limits documented, NOT a guarantee). [x] Assertion path limits (512 chars, 32 segments, no empty segments).
 - [x] Tier A subprocess adapter + hostile test agent (reachable from the CLI since session 8: `run`/`run-all --adapter NAME --config FILE`). [x] HTTP adapter (D-015). [ ] Tier B (bubblewrap).
 - [x] Isolation design written: docs/ADAPTER_ISOLATION.md + D-010 (status PROPOSED; design only, nothing implemented/tested). [x] D-010 accepted 2026-10-18 (owner delegated answers); adapter code may now be written test-first, Linux only.
 - [x] Threat model doc: docs/THREAT_MODEL.md (honest status per threat; secrets redaction is best-effort only).

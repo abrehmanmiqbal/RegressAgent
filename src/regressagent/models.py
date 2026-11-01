@@ -12,6 +12,8 @@ from .regex_safety import UnsafeRegexError, validate_pattern
 
 MAX_ASSERTIONS = 100
 MAX_TOOL_NAME = 128
+MAX_PATH_LENGTH = 512
+MAX_PATH_SEGMENTS = 32
 MAX_TOOL_ORDER = 50
 TYPE_NAMES = ("string", "number", "integer", "boolean", "null", "object", "array")
 
@@ -37,12 +39,21 @@ class AssertionOperator(StrEnum):
 class AssertionSpec(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    path: str = Field(min_length=1, description="Dot-separated path into the structured output.")
+    path: str = Field(
+        min_length=1,
+        max_length=MAX_PATH_LENGTH,
+        description="Dot-separated path into the structured output.",
+    )
     operator: AssertionOperator
     expected: Any = None
 
     @model_validator(mode="after")
     def _validate_expected_for_operator(self) -> AssertionSpec:
+        segments = self.path.split(".")
+        if len(segments) > MAX_PATH_SEGMENTS or not all(segments):
+            raise ValueError(
+                f"path must have 1-{MAX_PATH_SEGMENTS} non-empty dot-separated segments"
+            )
         if self.operator in (AssertionOperator.GT, AssertionOperator.LT):
             value = self.expected
             if isinstance(value, bool) or not isinstance(value, int | float):

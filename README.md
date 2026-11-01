@@ -71,7 +71,7 @@ Traces can also be kept in the database: `regressagent trace add trace.json` val
 
 ### Paths
 
-`path` is dot-separated: `echo.tag`, or `items.0.name` for list index 0 (ASCII digits only). A key that itself contains `.` cannot be addressed yet.
+`path` is dot-separated: `echo.tag`, or `items.0.name` for list index 0 (ASCII digits only). At most 512 characters and 32 segments; empty segments (`a..b`) are rejected when the case is loaded. A key that itself contains `.` cannot be addressed yet.
 
 ### Operators
 

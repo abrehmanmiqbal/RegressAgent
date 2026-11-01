@@ -315,3 +315,25 @@ def test_matches_type_is_documented_in_the_example_cases_and_cli(tmp_path):
         case_id="bad-case",
     )
     assert cli(tmp_path, "case", "add", bad) == 2
+
+
+# ---------------------------------------------------------------- path limits
+def test_path_length_and_depth_limits():
+    spec("a" * 512, Op.EXISTS)  # the limits themselves are fine
+    spec(".".join(["a"] * 32), Op.EXISTS)
+    with pytest.raises(ValidationError):
+        spec("a" * 513, Op.EXISTS)
+    with pytest.raises(ValidationError):
+        spec(".".join(["a"] * 33), Op.EXISTS)
+
+
+@pytest.mark.parametrize("bad", ["a..b", ".a", "a.", ".", ".."])
+def test_paths_with_empty_segments_are_rejected_at_load(bad):
+    with pytest.raises(ValidationError):
+        spec(bad, Op.EXISTS)
+
+
+def test_cli_rejects_a_case_with_a_too_long_path(tmp_path, capsys):
+    f = write_case(tmp_path, [{"path": "a" * 513, "operator": "exists"}])
+    assert cli(tmp_path, "case", "add", f) == 2
+    assert "Traceback" not in capsys.readouterr().err
