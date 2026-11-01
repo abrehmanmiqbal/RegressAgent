@@ -69,6 +69,8 @@ Traces can also be kept in the database: `regressagent trace add trace.json` val
 
 **Tool calls.** To assert on what the agent *did* (not only what it said), have your agent return its tool calls in a `steps` field of its output (`[{"tool": "lookup_order", "arguments": {...}}, ...]`; the demo `support` action does this). A trace with `steps` generates a `tool_order` assertion plus `equals` assertions on each call's scalar arguments (`steps.0.arguments.order_id`). See `examples/cases/support.json`: the `local-legacy` runner skips the lookup, its message is identical, and only the tool assertions catch it. If the trace output already has its own `steps` field, creating a case fails (rename one).
 
+**Importing real conversations.** `regressagent trace convert conversation.json --format openai` (or `anthropic`) turns a saved API conversation into a trace: `input` is everything before the first assistant turn, `output.message` the final assistant text, and `steps` every tool call with its result. The file must end with a final assistant answer; malformed shapes are rejected with exit 2. Only these two formats exist so far (no LangChain, no OpenTelemetry).
+
 ### Paths
 
 `path` is dot-separated: `echo.tag`, or `items.0.name` for list index 0 (ASCII digits only). At most 512 characters and 32 segments; empty segments (`a..b`) are rejected when the case is loaded. A key that itself contains `.` cannot be addressed yet.
@@ -104,6 +106,7 @@ regressagent [--db FILE] <command> ...
 | `demo` | Runs a built-in case offline; no database needed. Exit 0 if it passes. |
 | `case add FILE [--overwrite]` | Validates and saves a case. Prints `{"saved": true, "case_hash": ...}`. Fails (exit 2) if the id exists unless `--overwrite`. |
 | `case from-trace FILE [--stored] [--case-id ID] [--name N] [--path P]... [--save [--overwrite]]` | Turns a captured trace into a case (see below). Prints the case JSON (notes about skipped fields go to stderr); with `--save` it stores it instead. |
+| `trace convert FILE --format openai\|anthropic [--trace-id ID] [--add [--overwrite]]` | Converts a recorded OpenAI Chat Completions or Anthropic Messages conversation (tool calls included) into a trace; prints it, or stores it (redacted) with `--add`. Default trace id: `<format>-<12 hex of the file hash>`. |
 | `trace add FILE [--overwrite]` / `trace list` / `trace show ID` / `trace delete ID --yes` | Store raw traces in the database (after secret redaction), list, print and delete them. `case from-trace ID --stored` builds a case from a stored trace. |
 | `case list` | JSON list of case ids. |
 | `case show CASE_ID` | Prints the saved case. |

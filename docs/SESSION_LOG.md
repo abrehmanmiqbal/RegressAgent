@@ -46,3 +46,4 @@
 - Owner delegated the name; chose RegressAgent (D-016) after PyPI/GitHub checks; renamed package, command, env var, defaults, docs; tests 548 -> 551; wheel and clean-install re-verified on 3.12 and 3.11.
 - Schema v3 trace store (redacted before write), `trace` commands, `case from-trace --stored`, example agents; tests 552 -> 569; found+fixed partial-redaction bug.
 - Multi-step traces (D-018): steps, tool_* operators, support demo + examples; tests 569 -> 633; 5 mutations caught.
+- Assertion path limits; importers (OpenAI/Anthropic) + `trace convert`; tests 633 -> 671.

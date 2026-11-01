@@ -6,6 +6,7 @@ validated through typed models. Nothing in a case file is ever executed.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -18,6 +19,7 @@ from pydantic import ValidationError
 from .comparison import Verdict, compare_runs
 from .config import ConfigError, HttpAdapterConfig, load_config
 from .http_adapter import HttpAdapter
+from .importers import FORMATS, convert
 from .models import AssertionOperator, AssertionSpec, RegressionCase, RegressionResult
 from .regression import RegressionEngine
 from .report import render_json, render_markdown
@@ -80,8 +82,41 @@ def _case_from_trace_file(args: argparse.Namespace, repo: Repository | None = No
         raise CliError(str(exc)) from exc
 
 
+def _converted_trace(args: argparse.Namespace):
+    try:
+        with Path(args.file).open("rb") as handle:
+            raw = handle.read(MAX_TRACE_BYTES + 1)
+    except OSError as exc:
+        raise CliError(f"Cannot read conversation file: {exc.strerror or exc}") from exc
+    if len(raw) > MAX_TRACE_BYTES:
+        raise CliError(f"conversation file exceeds {MAX_TRACE_BYTES} bytes")
+    try:
+        data = json.loads(raw.decode("utf-8"), parse_constant=_reject_constant)
+    except (UnicodeDecodeError, ValueError, RecursionError):
+        raise CliError("conversation file is not valid JSON") from None
+    trace_id = args.trace_id or f"{args.format}-{hashlib.sha256(raw).hexdigest()[:12]}"
+    try:
+        converted = convert(args.format, data, trace_id=trace_id)
+        return parse_trace(json.dumps(converted).encode("utf-8"))
+    except TraceError as exc:
+        raise CliError(str(exc)) from exc
+
+
+def _reject_constant(name: str):
+    raise ValueError(f"non-finite number {name}")
+
+
 def _trace_command(args: argparse.Namespace, repo: Repository) -> None:
-    if args.trace_command == "add":
+    if args.trace_command == "convert":  # --add
+        trace = _converted_trace(args)
+        try:
+            digest, redacted = repo.save_trace(trace, overwrite=args.overwrite)
+        except TraceExistsError as exc:
+            raise CliError(f"{exc}; use --overwrite to replace it") from exc
+        _emit(
+            {"saved": True, "trace_id": trace.trace_id, "trace_hash": digest, "redacted": redacted}
+        )
+    elif args.trace_command == "add":
         trace = _read_trace_file(args.file)
         try:
             digest, redacted = repo.save_trace(trace, overwrite=args.overwrite)
@@ -288,6 +323,14 @@ def _build_parser() -> argparse.ArgumentParser:
     ta = trace_cmd.add_parser("add", help="Validate, redact and store a trace file.")
     ta.add_argument("file")
     ta.add_argument("--overwrite", action="store_true", help="Replace an existing trace id.")
+    tc = trace_cmd.add_parser(
+        "convert", help="Convert an OpenAI/Anthropic conversation file into a trace (prints it)."
+    )
+    tc.add_argument("file")
+    tc.add_argument("--format", required=True, choices=FORMATS)
+    tc.add_argument("--trace-id", help="Default: <format>-<first 12 hex of the file's SHA-256>.")
+    tc.add_argument("--add", action="store_true", help="Store the converted trace (redacted).")
+    tc.add_argument("--overwrite", action="store_true", help="With --add: replace an existing id.")
     trace_cmd.add_parser("list", help="List stored trace ids.")
     ts = trace_cmd.add_parser("show", help="Print a stored (redacted) trace.")
     ts.add_argument("trace_id")
@@ -338,6 +381,11 @@ def _build_parser() -> argparse.ArgumentParser:
 def _dispatch(args: argparse.Namespace) -> int:
     if args.command == "demo":
         return _demo()
+    if args.command == "trace" and args.trace_command == "convert" and not args.add:
+        if args.overwrite:
+            raise CliError("--overwrite is only used together with --add")
+        _emit(_converted_trace(args).model_dump(mode="json"))
+        return 0
     if (
         args.command == "case"
         and args.case_command == "from-trace"
