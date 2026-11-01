@@ -159,6 +159,40 @@ def _demo() -> int:
     return 0 if result.passed else 1
 
 
+def _port(value: str) -> int:
+    try:
+        port = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("must be an integer 0-65535") from None
+    if not 0 <= port <= 65535:
+        raise argparse.ArgumentTypeError("must be an integer 0-65535")
+    return port
+
+
+def _serve(args: argparse.Namespace) -> int:
+    from .api import make_server  # lazy: the API module imports this one
+
+    with Repository(args.db):  # create/migrate the database now and fail early if it is unusable
+        pass
+    try:
+        server, token = make_server(args.db, args.host, args.port)
+    except ValueError as exc:
+        raise CliError(str(exc)) from exc
+    except OSError as exc:
+        raise CliError(f"cannot start the server: {exc.strerror or exc}") from exc
+    host, port = server.server_address[:2]
+    shown = f"[{host}]" if ":" in str(host) else host
+    print(f"RegressAgent API listening on http://{shown}:{port}/", file=sys.stderr)
+    print(f"Token (shown once, keep it private): {token}", file=sys.stderr, flush=True)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("stopped", file=sys.stderr)
+    finally:
+        server.server_close()
+    return 0
+
+
 def _repeat_count(text: str) -> int:
     try:
         value = int(text)
@@ -317,6 +351,11 @@ def _build_parser() -> argparse.ArgumentParser:
     delete.add_argument("case_id")
     delete.add_argument("--yes", action="store_true", help="Confirm the irreversible deletion.")
 
+    srv = sub.add_parser(
+        "serve", help="Start the local HTTP API (loopback only, one-time bearer token)."
+    )
+    srv.add_argument("--host", default="127.0.0.1", help="Loopback address only (default 127.0.0.1).")
+    srv.add_argument("--port", type=_port, default=8765, help="0 picks a free port (default 8765).")
     trace_cmd = sub.add_parser("trace", help="Store and inspect raw traces.").add_subparsers(
         dest="trace_command", required=True
     )
@@ -381,6 +420,8 @@ def _build_parser() -> argparse.ArgumentParser:
 def _dispatch(args: argparse.Namespace) -> int:
     if args.command == "demo":
         return _demo()
+    if args.command == "serve":
+        return _serve(args)
     if args.command == "trace" and args.trace_command == "convert" and not args.add:
         if args.overwrite:
             raise CliError("--overwrite is only used together with --add")

@@ -47,3 +47,4 @@
 - Schema v3 trace store (redacted before write), `trace` commands, `case from-trace --stored`, example agents; tests 552 -> 569; found+fixed partial-redaction bug.
 - Multi-step traces (D-018): steps, tool_* operators, support demo + examples; tests 569 -> 633; 5 mutations caught.
 - Assertion path limits; importers (OpenAI/Anthropic) + `trace convert`; tests 633 -> 671.
+- Local HTTP API + `serve` (D-020); tests 672 -> 718; 8 security mutations caught.

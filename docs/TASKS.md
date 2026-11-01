@@ -33,9 +33,9 @@ _[x] = done AND verified by an executed check (see TEST_EVIDENCE.md). Local-only
 - [x] CLI: case add/list/show, run, runs, compare (+ exit codes) with tests.
 - [x] CLI: `report <before> <after> [--format markdown|json]` (exit 1 if regressed).
 - [x] CLI: `case delete <id> --yes` (refuses without --yes; reports runs deleted) and `run-all --label L [--runner R]` (exit 1 if any fail, exit 2 if no cases).
-- [ ] Validated HTTP API (local-only bind by default) + integration tests.
+- [x] Validated local HTTP API (loopback-only bind, bearer token, Host/Origin checks, caps; D-020) + 46 tests incl. a real-process `serve` test.
 - [x] README documents every CLI command, case-file format, operators, limits and exit codes (snippets executed; see TEST_EVIDENCE.md).
-- [ ] Docs for the HTTP API (API not built).
+- [x] Docs for the HTTP API (README "Local HTTP API").
 - [x] HTTP adapter (`type = "http"`, session 8, D-015): SSRF guard, pinned connection, no redirects, TLS verified, size/deadline caps, env-var credentials.
 
 ## Milestone 4 — Usable interface

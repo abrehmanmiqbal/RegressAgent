@@ -123,6 +123,26 @@ Runners (`--runner`): `local` (default; deterministic offline demo agent) and `l
 
 `examples/agents/greeter_agent.py` (a command agent) and `examples/agents/greeter_http.py` (the same agent over HTTP, `python examples/agents/greeter_http.py [--bug]`) are dependency-free examples. `tests/test_example_agents.py` runs the whole story with them: good run, a "bad deploy" (`GREETER_BUG=1`, or `--bug`), `compare` says `regressed`.
 
+### Local HTTP API
+
+`regressagent serve [--port N]` starts a JSON API on **127.0.0.1 only** (other hosts are refused) and prints a random bearer token once. Every request needs `Authorization: Bearer <token>`; the Host header must be the loopback address, a foreign `Origin` or cross-site `Sec-Fetch-Site` is rejected, no CORS headers are sent, bodies are capped at 1 MB (chunked bodies are refused), and errors never contain tracebacks. All of this is checked before a request body is read. Adapters (commands, HTTP endpoints) can **not** be run through the API; only the built-in demo runners can.
+
+```bash
+regressagent serve --port 8765        # prints: Token (shown once, keep it private): <token>
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8765/api/v1/cases
+```
+
+| Method and path (under `/api/v1`) | What |
+|---|---|
+| `GET /health` | `{"ok": true, "version": ...}` |
+| `GET /cases`, `POST /cases[?overwrite=1]` (body: case), `GET /cases/ID`, `DELETE /cases/ID?confirm=yes` | manage cases |
+| `GET /cases/ID/runs`, `POST /cases/ID/run` (body: `label`, `runner`, `repeat`) | list / start demo-runner runs |
+| `GET /runs/ID`, `GET /compare?before=1&after=2`, `GET /report?before=1&after=2[&format=json]` | run, diff, report |
+| `GET /traces`, `POST /traces[?overwrite=1]` (body: trace), `GET /traces/ID`, `DELETE /traces/ID?confirm=yes` | stored (redacted) traces |
+| `POST /traces/ID/case` (body: `case_id`, `name`, `paths`, `save`) | build (and optionally save) a case from a stored trace |
+
+Statuses: 400 bad request, 401 token, 403 host/origin, 404, 405, 409 exists, 411/413 body, 415 content type, 422 invalid case (with `details`).
+
 ### Running a real agent: subprocess adapters (Tier A, Linux only)
 
 `--adapter NAME --config FILE` runs the case input through a command you configured, instead of a demo runner. The config is a TOML file you write and pass **explicitly** (it is never discovered from the working directory, so a cloned repository cannot supply commands; it must not be group/world-writable):
