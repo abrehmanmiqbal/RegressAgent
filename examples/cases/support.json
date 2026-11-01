@@ -1,0 +1,12 @@
+{
+  "case_id": "support-order",
+  "name": "Agent looks the order up before replying",
+  "input": {"action": "support", "order_id": "A-100"},
+  "assertions": [
+    {"path": "message", "operator": "equals", "expected": "Your order A-100 is on its way."},
+    {"path": "steps", "operator": "tool_called", "expected": "lookup_order"},
+    {"path": "steps", "operator": "tool_not_called", "expected": "refund_order"},
+    {"path": "steps", "operator": "tool_order", "expected": ["lookup_order", "send_reply"]},
+    {"path": "steps.0.arguments.order_id", "operator": "equals", "expected": "A-100"}
+  ]
+}

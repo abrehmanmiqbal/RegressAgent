@@ -61,3 +61,22 @@ def test_example_config_is_valid(tmp_path):
     adapters = load_config(target).adapters
     assert set(adapters) == {"my-cmd-agent", "my-http-agent"}
     assert isinstance(adapters["my-http-agent"], HttpAdapterConfig)
+
+
+def test_support_example_catches_the_skipped_tool_call():
+    case = load_case_file(str(CASES_DIR / "support.json"))
+    assert RegressionEngine(RUNNERS["local"]()).run_case(case).passed
+    legacy = RegressionEngine(RUNNERS["local-legacy"]()).run_case(case)
+    failed = {a.path + ":" + a.operator.value for a in legacy.assertions if not a.passed}
+    assert "steps:tool_called" in failed and "steps:tool_order" in failed
+    assert "message:equals" not in failed  # same words, different behaviour
+
+
+def test_example_trace_with_steps_converts_and_round_trips():
+    from regressagent.trace import case_from_trace, parse_trace
+
+    raw = (CASES_DIR.parent / "traces" / "support-order.json").read_bytes()
+    case, notes = case_from_trace(parse_trace(raw))
+    assert notes == []
+    assert RegressionEngine(RUNNERS["local"]()).run_case(case).passed
+    assert not RegressionEngine(RUNNERS["local-legacy"]()).run_case(case).passed

@@ -28,12 +28,27 @@ class TraceError(ValueError):
     """A predictable, user-facing problem with a trace (CLI maps it to exit code 2)."""
 
 
+MAX_STEPS = 200
+MAX_ORDER_NAMES = 50
+
+
+class Step(BaseModel):
+    """One tool call made by the agent. ``result`` is kept for humans but never asserted on."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    tool: str = Field(min_length=1, max_length=128)
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    result: Any = None
+
+
 class Trace(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     trace_id: str = Field(min_length=1, max_length=128)
     input: dict[str, Any]
     output: dict[str, Any]
+    steps: tuple[Step, ...] = Field(default=(), max_length=MAX_STEPS)
 
 
 def _reject_constant(name: str) -> Any:
@@ -94,6 +109,19 @@ def _leaves(value: Any, path: str = "") -> Iterator[tuple[str, Any, str | None]]
         yield path, value, None
 
 
+def _assertable_view(trace: Trace) -> dict[str, Any]:
+    """What assertions can address: the output, plus ``steps`` (tool + arguments, no results)."""
+    if not trace.steps:
+        return trace.output
+    if "steps" in trace.output:
+        raise TraceError(
+            "the trace output already has a 'steps' field, which conflicts with trace steps; "
+            "rename one of them"
+        )
+    steps = [{"tool": s.tool, "arguments": s.arguments} for s in trace.steps]
+    return {**trace.output, "steps": steps}
+
+
 def _is_secret_like(redacted_root: Any, root: Any, path: str, value: Any) -> bool:
     found, redacted = _resolve_path(redacted_root, path)
     return not found or not _strict_equal(redacted, value)
@@ -113,7 +141,8 @@ def case_from_trace(
             "trace input contains secret-looking values; remove or replace them in the trace "
             "before creating a case"
         )
-    redacted_output = redactor.value(trace.output)
+    view = _assertable_view(trace)
+    redacted_view = redactor.value(view)
     notes: list[str] = []
     specs: list[AssertionSpec] = []
 
@@ -122,12 +151,12 @@ def case_from_trace(
         if len(unique) > MAX_ASSERTIONS:
             raise TraceError(f"at most {MAX_ASSERTIONS} paths are allowed per case")
         for path in unique:
-            found, value = _resolve_path(trace.output, path) if path else (False, None)
+            found, value = _resolve_path(view, path) if path else (False, None)
             if not found:
                 raise TraceError(f"path '{path}' not found in the trace output")
             if (
                 isinstance(value, str) and "[REDACTED" in value
-            ) or _is_secret_like(redacted_output, trace.output, path, value):
+            ) or _is_secret_like(redacted_view, view, path, value):
                 raise TraceError(
                     f"path '{path}' looks like a secret (or contains one); refusing to store it"
                 )
@@ -135,14 +164,14 @@ def case_from_trace(
                 raise TraceError(f"value at '{path}' is too large to assert on")
             specs.append(AssertionSpec(path=path, operator=AssertionOperator.EQUALS, expected=value))
     else:
-        for path, value, problem in _leaves(trace.output):
+        def consider(path: str, value: Any, problem: str | None) -> None:
             if len(path) > MAX_PATH_LENGTH:
                 notes.append(f"skipped '{path[:40]}...': path longer than {MAX_PATH_LENGTH} chars")
             elif problem:
                 notes.append(f"skipped '{path}': {problem}")
             elif isinstance(value, str) and "[REDACTED" in value:
                 notes.append(f"skipped '{path}': value was redacted when the trace was stored")
-            elif _is_secret_like(redacted_output, trace.output, path, value):
+            elif _is_secret_like(redacted_view, view, path, value):
                 notes.append(f"skipped '{path}': looks like a secret (redaction would change it)")
             elif isinstance(value, str) and len(value) > MAX_EXPECTED_STRING:
                 notes.append(f"skipped '{path}': string longer than {MAX_EXPECTED_STRING} chars")
@@ -150,6 +179,23 @@ def case_from_trace(
                 specs.append(
                     AssertionSpec(path=path, operator=AssertionOperator.EQUALS, expected=value)
                 )
+
+        for path, value, problem in _leaves(trace.output):
+            consider(path, value, problem)
+        if trace.steps:
+            names = [step.tool for step in trace.steps]
+            if len(names) > MAX_ORDER_NAMES:
+                notes.append(f"tool_order covers only the first {MAX_ORDER_NAMES} of {len(names)} steps")
+            specs.append(
+                AssertionSpec(
+                    path="steps",
+                    operator=AssertionOperator.TOOL_ORDER,
+                    expected=names[:MAX_ORDER_NAMES],
+                )
+            )
+            for index, step in enumerate(trace.steps):
+                for path, value, problem in _leaves(step.arguments, f"steps.{index}.arguments"):
+                    consider(path, value, problem)
         if not specs:
             raise TraceError("no assertable fields found in the trace output")
         if len(specs) > MAX_ASSERTIONS:

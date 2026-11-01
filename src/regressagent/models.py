@@ -11,7 +11,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from .regex_safety import UnsafeRegexError, validate_pattern
 
 MAX_ASSERTIONS = 100
+MAX_TOOL_NAME = 128
+MAX_TOOL_ORDER = 50
 TYPE_NAMES = ("string", "number", "integer", "boolean", "null", "object", "array")
+
+
+def _is_tool_name(value: Any) -> bool:
+    return isinstance(value, str) and 1 <= len(value) <= MAX_TOOL_NAME
 
 
 class AssertionOperator(StrEnum):
@@ -23,6 +29,9 @@ class AssertionOperator(StrEnum):
     LT = "lt"
     REGEX = "regex"
     MATCHES_TYPE = "matches_type"
+    TOOL_CALLED = "tool_called"
+    TOOL_NOT_CALLED = "tool_not_called"
+    TOOL_ORDER = "tool_order"
 
 
 class AssertionSpec(BaseModel):
@@ -40,6 +49,21 @@ class AssertionSpec(BaseModel):
                 raise ValueError(f"'{self.operator.value}' requires a numeric 'expected'")
             if isinstance(value, float) and not math.isfinite(value):
                 raise ValueError("'expected' must be a finite number")
+        elif self.operator in (AssertionOperator.TOOL_CALLED, AssertionOperator.TOOL_NOT_CALLED):
+            if not _is_tool_name(self.expected):
+                raise ValueError(
+                    f"'{self.operator.value}' requires a tool name (1-{MAX_TOOL_NAME} chars)"
+                )
+        elif self.operator == AssertionOperator.TOOL_ORDER:
+            names = self.expected
+            if (
+                not isinstance(names, list)
+                or not 1 <= len(names) <= MAX_TOOL_ORDER
+                or not all(_is_tool_name(n) for n in names)
+            ):
+                raise ValueError(
+                    f"'tool_order' requires a list of 1-{MAX_TOOL_ORDER} tool names"
+                )
         elif self.operator == AssertionOperator.MATCHES_TYPE:
             names = self.expected if isinstance(self.expected, list) else [self.expected]
             if (

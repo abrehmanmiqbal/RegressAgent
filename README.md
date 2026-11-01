@@ -55,7 +55,7 @@ Limits (all enforced when the file is loaded; unknown fields are rejected): file
 
 ### Capturing a trace into a case
 
-A trace is one JSON file recording something your agent actually did: `{"trace_id": "...", "input": {...}, "output": {...}}` (unknown fields are rejected; max 1,000,000 bytes, nesting depth 32, no NaN/Infinity). Traces are data and are never executed.
+A trace is one JSON file recording something your agent actually did: `{"trace_id": "...", "input": {...}, "output": {...}, "steps": [...]}` where the optional `steps` list the tool calls, each `{"tool": "name", "arguments": {...}, "result": ...}` (max 200; `result` is kept for reading but never asserted on). Unknown fields are rejected; max 1,000,000 bytes, nesting depth 32, no NaN/Infinity). Traces are data and are never executed.
 
 ```bash
 regressagent case from-trace examples/traces/greet-ava.json            # review the generated case
@@ -66,6 +66,8 @@ regressagent case from-trace trace.json --path message --path items.0.id --save
 By default every scalar field of `output` becomes an `equals` assertion (at most 100; otherwise choose with `--path`). **Review the result:** it pins values exactly, including ones that may legitimately vary (timestamps, ids). Fields are skipped with a `note:` on stderr when the key is empty or contains `.`, the path is over 512 characters, a string is over 1,000 characters, or the value looks like a secret (per the redaction rules; secret values are never copied into a case). A secret-looking value in the trace `input` makes the command fail.
 
 Traces can also be kept in the database: `regressagent trace add trace.json` validates the file and stores it **redacted** (secrets never reach the disk; the reply says `"redacted": true` when something was replaced). Then `regressagent case from-trace TRACE_ID --stored` builds the case from the stored copy; fields that were redacted (including partly redacted strings) are skipped with a note, and stored traces keep their keys sorted, so the generated assertions come out in alphabetical order.
+
+**Tool calls.** To assert on what the agent *did* (not only what it said), have your agent return its tool calls in a `steps` field of its output (`[{"tool": "lookup_order", "arguments": {...}}, ...]`; the demo `support` action does this). A trace with `steps` generates a `tool_order` assertion plus `equals` assertions on each call's scalar arguments (`steps.0.arguments.order_id`). See `examples/cases/support.json`: the `local-legacy` runner skips the lookup, its message is identical, and only the tool assertions catch it. If the trace output already has its own `steps` field, creating a case fails (rename one).
 
 ### Paths
 
@@ -81,6 +83,8 @@ Traces can also be kept in the database: `regressagent trace add trace.json` val
 | `contains` | any JSON value | Python `in`: substring for strings, membership for lists, key for objects |
 | `gt` / `lt` | finite number | actual is a number (not a boolean) strictly greater / less than expected |
 | `matches_type` | type name, or a list of names | actual's JSON type is the name (or any in the list): `string`, `number`, `integer`, `boolean`, `null`, `object`, `array`. Strict: a boolean is never a number; only ints are `integer` (`1.0` is not). Unknown names are rejected when the case is loaded. |
+| `tool_called` / `tool_not_called` | tool name | actual is a list of tool calls (`{"tool": "<name>", ...}`); the tool appears / does not appear. `tool_not_called` fails if any step is malformed (absence cannot be proven). |
+| `tool_order` | list of 1-50 tool names | the tools were called in this order (a subsequence: other calls may sit in between). |
 | `regex` | pattern string | actual is a string and `re.search(pattern, actual)` finds a match |
 
 Every operator except `exists` fails if the path is missing. Use `^...$` to anchor a regex.

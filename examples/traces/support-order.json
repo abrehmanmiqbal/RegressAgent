@@ -1,0 +1,29 @@
+{
+  "trace_id": "support-order-trace",
+  "input": {
+    "action": "support",
+    "order_id": "A-100"
+  },
+  "output": {
+    "message": "Your order A-100 is on its way.",
+    "action": "support"
+  },
+  "steps": [
+    {
+      "tool": "lookup_order",
+      "arguments": {
+        "order_id": "A-100"
+      },
+      "result": {
+        "status": "shipped"
+      }
+    },
+    {
+      "tool": "send_reply",
+      "arguments": {
+        "order_id": "A-100",
+        "template": "shipping_update"
+      }
+    }
+  ]
+}

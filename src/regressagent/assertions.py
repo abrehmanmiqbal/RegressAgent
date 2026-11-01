@@ -56,6 +56,19 @@ def _has_type(value: Any, name: str) -> bool:
     return name == "array" and isinstance(value, list)
 
 
+def _tool_names(actual: list[Any]) -> tuple[list[str], bool]:
+    """Names of well-formed steps (``{"tool": "<name>", ...}``) and whether any step was malformed."""
+    names: list[str] = []
+    malformed = False
+    for item in actual:
+        tool = item.get("tool") if isinstance(item, dict) else None
+        if isinstance(tool, str) and tool:
+            names.append(tool)
+        else:
+            malformed = True
+    return names, malformed
+
+
 def _is_number(value: Any) -> bool:
     return isinstance(value, int | float) and not isinstance(value, bool)
 
@@ -91,6 +104,30 @@ def evaluate_assertion(output: dict[str, Any], spec: AssertionSpec) -> Assertion
         else:
             passed = actual < spec.expected
             message = "Value is less" if passed else "Value is not less"
+    elif spec.operator in (
+        AssertionOperator.TOOL_CALLED,
+        AssertionOperator.TOOL_NOT_CALLED,
+        AssertionOperator.TOOL_ORDER,
+    ):
+        if not isinstance(actual, list):
+            passed = False
+            message = "Actual value is not a list of tool calls"
+        else:
+            names, malformed = _tool_names(actual)
+            if spec.operator == AssertionOperator.TOOL_CALLED:
+                passed = spec.expected in names
+                message = "Tool was called" if passed else "Tool was not called"
+            elif spec.operator == AssertionOperator.TOOL_NOT_CALLED:
+                if malformed:  # cannot prove absence when some steps cannot be read
+                    passed = False
+                    message = "Tool calls contain malformed steps; cannot prove the tool was not called"
+                else:
+                    passed = spec.expected not in names
+                    message = "Tool was not called" if passed else "Tool was called"
+            else:
+                remaining = iter(names)
+                passed = all(any(n == want for n in remaining) for want in spec.expected)
+                message = "Tools were called in order" if passed else "Tools were not called in this order"
     elif spec.operator == AssertionOperator.MATCHES_TYPE:
         names = spec.expected if isinstance(spec.expected, list) else [spec.expected]
         passed = any(_has_type(actual, n) for n in names)
