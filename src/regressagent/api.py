@@ -17,6 +17,7 @@ import re
 import secrets
 from collections.abc import Callable, Mapping
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from importlib import resources
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
@@ -43,6 +44,18 @@ _ID_MAX = 128
 _INT = re.compile(r"[0-9]{1,18}")
 _CONTROL = re.compile(r"[\x00-\x1f\x7f/\\]")
 _TRUE = {"1", "true", "yes"}
+
+
+_UI_FILES = {
+    "/": ("index.html", "text/html; charset=utf-8"),
+    "/index.html": ("index.html", "text/html; charset=utf-8"),
+    "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+    "/app.css": ("app.css", "text/css; charset=utf-8"),
+}
+UI_CSP = (
+    "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; "
+    "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+)
 
 
 class ApiError(Exception):
@@ -75,6 +88,21 @@ class Api:
         self._db = db_path
         self._token = token
         self._hosts = {f"127.0.0.1:{port}", f"localhost:{port}", f"[::1]:{port}"}
+        ui = resources.files("regressagent") / "ui"
+        self._ui = {path: ((ui / name).read_bytes(), ctype) for path, (name, ctype) in _UI_FILES.items()}
+
+    def static(
+        self, method: str, target: str, headers: Mapping[str, str]
+    ) -> tuple[int, bytes, dict[str, str]] | None:
+        """The UI files (no token needed: they contain no data). None if ``target`` is not one."""
+        entry = self._ui.get(urlsplit(target).path)
+        if entry is None or method not in ("GET", "HEAD"):
+            return None
+        try:
+            self._check_origin(headers)
+        except ApiError as exc:
+            return exc.status, json.dumps({"error": exc.message}).encode(), {"Content-Type": "application/json"}
+        return 200, entry[0], {"Content-Type": entry[1], "Content-Security-Policy": UI_CSP}
 
     # ------------------------------------------------------------------ security + routing
     def handle(
@@ -90,6 +118,8 @@ class Api:
             if method not in ("GET", "POST", "DELETE"):
                 extra["Allow"] = "GET, POST, DELETE"
                 raise ApiError(405, "method not allowed")
+            if not urlsplit(target).path.startswith("/api/"):
+                raise ApiError(404, "not found")
             self._check_token(headers.get("Authorization", ""), extra)
             status, body = self._guarded(method, target, headers, read_body)
             return status, body, extra
@@ -182,6 +212,7 @@ class Api:
             return 200, repo.list_case_ids()  # type: ignore[return-value]
         if n == 1 and method == "POST":
             case = RegressionCase.model_validate(body())
+            self._id(case.case_id)
             digest = repo.save_case(case, overwrite=self._flag(query, "overwrite"))
             return 201, {"case_id": case.case_id, "case_hash": digest}
         case_id = self._id(rest[1]) if n >= 2 else ""
@@ -239,6 +270,7 @@ class Api:
             return 200, repo.list_trace_ids()  # type: ignore[return-value]
         if n == 1 and method == "POST":
             trace = parse_trace(json.dumps(body()).encode("utf-8"))
+            self._id(trace.trace_id)
             digest, redacted = repo.save_trace(trace, overwrite=self._flag(query, "overwrite"))
             return 201, {"saved": True, "trace_id": trace.trace_id, "trace_hash": digest, "redacted": redacted}
         trace_id = self._id(rest[1]) if n >= 2 else ""
@@ -263,6 +295,7 @@ class Api:
                 repo.get_trace(trace_id), case_id=data.get("case_id"), name=data.get("name"), paths=paths
             )
             if data.get("save") is True:
+                self._id(case.case_id)
                 digest = repo.save_case(case, overwrite=self._flag(query, "overwrite"))
                 return 201, {"saved": True, "case_hash": digest, "case": case.model_dump(mode="json"), "notes": notes}
             return 200, {"saved": False, "case": case.model_dump(mode="json"), "notes": notes}
@@ -351,10 +384,14 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _serve(self) -> None:
         api: Api = self.server.api  # type: ignore[attr-defined]
-        status, body, extra = api.handle(self.command, self.path, self.headers, self._read_body)
-        payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        served = api.static(self.command, self.path, self.headers)
+        if served is not None:
+            status, payload, extra = served
+        else:
+            status, body, extra = api.handle(self.command, self.path, self.headers, self._read_body)
+            payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
+            extra = {"Content-Type": "application/json; charset=utf-8", **extra}
         self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
         for key, value in {**_SAFE_HEADERS, **extra}.items():
             self.send_header(key, value)
@@ -386,6 +423,8 @@ def make_server(
     if not _loopback(host):
         raise ValueError("the API only binds to a loopback address (127.0.0.1, ::1 or localhost)")
     token = token or secrets.token_urlsafe(32)
+    with Repository(db_path):  # create/migrate once, so concurrent first requests cannot race on it
+        pass
     server = (_Server6 if ":" in host else _Server)((host, port), _Handler)
     server.api = Api(db_path, token, server.server_address[1])
     return server, token

@@ -39,7 +39,7 @@ _[x] = done AND verified by an executed check (see TEST_EVIDENCE.md). Local-only
 - [x] HTTP adapter (`type = "http"`, session 8, D-015): SSRF guard, pinned connection, no redirects, TLS verified, size/deadline caps, env-var credentials.
 
 ## Milestone 4 — Usable interface
-- [ ] Minimal local UI (cases, runs, diffs, reports); empty/error/loading states.
+- [x] Minimal local UI (cases, runs, compare/diff, report, traces; empty/error/loading states; D-021). Tested with jsdom against the real server; NOT tested in a real browser.
 
 ## Milestone 5 — Security and robustness
 - [x] Case files: size cap (1,000,000 bytes), JSON-only parse, typed validation, `extra=forbid`; hostile/malformed/deep-nesting/invalid-UTF-8 probes rejected cleanly.

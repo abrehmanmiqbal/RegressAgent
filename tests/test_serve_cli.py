@@ -27,6 +27,7 @@ def test_serve_starts_answers_and_stops_cleanly_on_ctrl_c(tmp_path):
         port = int(re.search(r"http://127\.0\.0\.1:(\d+)/", banner).group(1))
         token = re.search(r"Token[^:]*:\s*(\S+)", banner).group(1)
         assert len(token) >= 32
+        assert f"/#token={token}" in banner  # the UI link carries the token in the fragment only
         conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
         conn.request("GET", "/api/v1/health", headers={"Authorization": f"Bearer {token}"})
         resp = conn.getresponse()

@@ -1,0 +1,7 @@
+{
+  "name": "regressagent-ui-tests",
+  "private": true,
+  "description": "jsdom end-to-end tests for the local UI (run through pytest: tests/test_ui_e2e.py)",
+  "type": "module",
+  "devDependencies": { "jsdom": "26.1.0" }
+}

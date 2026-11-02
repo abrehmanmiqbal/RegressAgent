@@ -6,7 +6,7 @@ RegressAgent is built free-first: the core loop runs locally without paid APIs, 
 
 ## Project status
 
-Early development. Implemented and tested locally and in CI (Python 3.11 and 3.12): typed models, deterministic offline runners, Tier A subprocess adapters, secret redaction of stored runs, assertion engine, SQLite persistence, before/after comparison, Markdown/JSON reports, and the CLI below. **Not implemented yet:** HTTP API, UI, trace import, sandboxed (Tier B) adapters, HTML reports. Real agents can be tested through Tier A subprocess adapters (see below; **not a sandbox**). See [docs/TASKS.md](docs/TASKS.md) and [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md).
+Early development (alpha). Implemented, tested locally on Linux and in CI (Python 3.11 and 3.12): typed models, 11 assertion operators (including tool-call operators), SQLite persistence, before/after comparison, Markdown/JSON reports, traces (stored redacted, converted from OpenAI/Anthropic conversations), real agents through Tier A command adapters and HTTP adapters, secret redaction, a loopback-only HTTP API and a small web UI, plus the CLI below. **Not implemented / not verified:** a sandbox (Tier B), real-browser testing of the UI, macOS/Windows, HTML reports, LangChain/OpenTelemetry importers, full JSON-schema validation. See [docs/TASKS.md](docs/TASKS.md) and [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md).
 
 ## Install
 
@@ -122,6 +122,10 @@ Runners (`--runner`): `local` (default; deterministic offline demo agent) and `l
 ### Try it with a real (tiny) agent
 
 `examples/agents/greeter_agent.py` (a command agent) and `examples/agents/greeter_http.py` (the same agent over HTTP, `python examples/agents/greeter_http.py [--bug]`) are dependency-free examples. `tests/test_example_agents.py` runs the whole story with them: good run, a "bad deploy" (`GREETER_BUG=1`, or `--bug`), `compare` says `regressed`.
+
+### Local UI
+
+`regressagent serve` also serves a small web UI. Open the **"Open the UI"** link it prints (`http://127.0.0.1:PORT/#token=...`): the token travels in the URL fragment (never sent to the server), is removed from the address bar at once and lives in page memory only. The UI lists, adds, runs (demo runners), compares and deletes cases, shows run history, diffs and the Markdown report, and stores traces (redacted) and turns them into cases. It is plain HTML/CSS/JS served from the same origin under a strict Content-Security-Policy (no inline code, no external resources, no `innerHTML`). It was tested end to end with jsdom against the real server (`ui-tests/`, run by `pytest`, which installs the pinned jsdom with `npm ci` when Node is available), **not in a real browser**.
 
 ### Local HTTP API
 

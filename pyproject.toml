@@ -32,6 +32,9 @@ Documentation = "https://github.com/abrehmanmiqbal/RegressAgent/tree/main/docs"
 [project.scripts]
 regressagent = "regressagent.cli:main"
 
+[tool.setuptools.package-data]
+regressagent = ["ui/*.html", "ui/*.js", "ui/*.css"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

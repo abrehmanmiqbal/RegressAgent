@@ -293,3 +293,26 @@ def test_parallel_requests_work(api):
 def test_api_error_carries_status_and_message():
     err = ApiError(418, "teapot")
     assert (err.status, err.message) == (418, "teapot")
+
+
+def test_ids_that_could_not_be_fetched_again_are_refused_at_creation(api):
+    for bad in ("a/b", "a\\b", "a\x01b", "x" * 129):
+        assert api.call("POST", f"{V1}/cases", dict(CASE, case_id=bad))[0] in (400, 422)
+        assert api.call("POST", f"{V1}/traces", dict(SECRET_TRACE, trace_id=bad))[0] in (400, 422)
+    api.call("POST", f"{V1}/traces", SECRET_TRACE)
+    assert api.call("POST", f"{V1}/traces/t1/case", {"case_id": "x/y", "save": True})[0] == 400
+    assert api.call("GET", f"{V1}/cases")[1] == []  # nothing was stored
+
+
+def test_first_parallel_requests_on_a_fresh_database_do_not_race_on_migration(tmp_path):
+    for round_number in range(6):
+        server, token = make_server(str(tmp_path / f"fresh{round_number}.db"), "127.0.0.1", 0)
+        threading.Thread(target=lambda s=server: s.serve_forever(poll_interval=0.01), daemon=True).start()
+        client = Client(server.server_address[1], token)
+        try:
+            with ThreadPoolExecutor(12) as pool:
+                statuses = list(pool.map(lambda _, c=client: c.call("GET", f"{V1}/cases")[0], range(12)))
+            assert statuses == [200] * 12
+        finally:
+            server.shutdown()
+            server.server_close()

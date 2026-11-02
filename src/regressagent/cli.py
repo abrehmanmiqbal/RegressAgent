@@ -183,6 +183,7 @@ def _serve(args: argparse.Namespace) -> int:
     host, port = server.server_address[:2]
     shown = f"[{host}]" if ":" in str(host) else host
     print(f"RegressAgent API listening on http://{shown}:{port}/", file=sys.stderr)
+    print(f"Open the UI:  http://{shown}:{port}/#token={token}", file=sys.stderr)
     print(f"Token (shown once, keep it private): {token}", file=sys.stderr, flush=True)
     try:
         server.serve_forever()

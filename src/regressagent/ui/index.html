@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RegressAgent</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header>
+    <h1>RegressAgent</h1>
+    <nav>
+      <button type="button" data-tab="cases" class="active">Cases</button>
+      <button type="button" data-tab="traces">Traces</button>
+    </nav>
+    <span id="status" role="status" aria-live="polite"></span>
+  </header>
+  <main>
+    <section id="login" hidden>
+      <p>Paste the token printed by <code>regressagent serve</code>. It is kept in memory only.</p>
+      <input id="token-input" type="password" autocomplete="off" aria-label="API token">
+      <button type="button" id="token-save">Connect</button>
+    </section>
+
+    <div id="app" hidden>
+      <section id="tab-cases">
+        <h2>Cases</h2>
+        <ul id="cases-list"></ul>
+        <details>
+          <summary>Add a case (JSON)</summary>
+          <textarea id="case-new" rows="8" spellcheck="false" aria-label="Case JSON"></textarea>
+          <label><input type="checkbox" id="case-overwrite"> overwrite if it exists</label>
+          <button type="button" id="case-add">Save case</button>
+        </details>
+        <div id="case-panel" hidden>
+          <h3 id="case-title"></h3>
+          <pre id="case-detail"></pre>
+          <div class="row">
+            <label>Runner
+              <select id="run-runner"><option>local</option><option>local-legacy</option></select>
+            </label>
+            <label>Repeat <input id="run-repeat" type="number" min="1" max="20" value="1"></label>
+            <label>Label <input id="run-label" value="ui"></label>
+            <button type="button" id="run-go">Run</button>
+            <button type="button" id="case-delete" class="danger">Delete case</button>
+          </div>
+          <h3>Runs</h3>
+          <p id="runs-empty" hidden>No runs yet.</p>
+          <table id="runs-table" hidden>
+            <thead><tr><th>Run</th><th>Label</th><th>Runner</th><th>Result</th><th>When</th></tr></thead>
+            <tbody id="runs-body"></tbody>
+          </table>
+          <div class="row">
+            <label>Before <select id="cmp-before"></select></label>
+            <label>After <select id="cmp-after"></select></label>
+            <button type="button" id="compare-go">Compare</button>
+          </div>
+          <div id="compare-out" hidden>
+            <h3 id="verdict"></h3>
+            <table id="diff-table">
+              <thead><tr><th>Path</th><th>Operator</th><th>Change</th></tr></thead>
+              <tbody id="diff-body"></tbody>
+            </table>
+            <details><summary>Markdown report</summary><pre id="report-text"></pre></details>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-traces" hidden>
+        <h2>Traces</h2>
+        <ul id="traces-list"></ul>
+        <details>
+          <summary>Add a trace (JSON)</summary>
+          <textarea id="trace-new" rows="8" spellcheck="false" aria-label="Trace JSON"></textarea>
+          <label><input type="checkbox" id="trace-overwrite"> overwrite if it exists</label>
+          <button type="button" id="trace-add">Store trace (redacted)</button>
+        </details>
+        <div id="trace-panel" hidden>
+          <h3 id="trace-title"></h3>
+          <pre id="trace-detail"></pre>
+          <div class="row">
+            <label>Case id <input id="trace-case-id"></label>
+            <button type="button" id="trace-preview">Preview case</button>
+            <button type="button" id="trace-save">Save case</button>
+          </div>
+          <pre id="trace-case-out" hidden></pre>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
