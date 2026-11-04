@@ -24,7 +24,7 @@ Process-level limits and hygiene. **Tier A does not stop the child from reading 
 - **Resource limits (POSIX):** `RLIMIT_CPU`, `RLIMIT_AS`, `RLIMIT_FSIZE`, `RLIMIT_NOFILE`, `RLIMIT_NPROC`, `RLIMIT_CORE=0`, applied in the child before exec. Caveats to test: `preexec_fn` is not safe with threads (prefer a tiny launcher or `prlimit`), `RLIMIT_NPROC` is per-user not per-process-tree, `RLIMIT_AS` can break some runtimes.
 - **Windows:** no rlimits/process groups equivalent without Job Objects; adapters are **unsupported on Windows** until a Job Object design exists (refuse, do not degrade).
 
-### Tier B: sandbox (strong isolation, optional)
+### Tier B: sandbox (IMPLEMENTED in session 9, see D-022; the text below is the original design)
 Run the Tier A command inside an external sandbox: network disabled, read-only filesystem except the temp dir, no access to the home directory, dropped capabilities. Candidates: `bwrap` (bubblewrap), `nsjail`, or a container runtime (`docker`/`podman`). Requirements: fail closed if the configured sandbox binary is absent; the sandbox command line is built by RegressAgent from structured config (never from case data); one integration test per promised property (e.g. "child cannot read `~/.ssh`", "child cannot open a socket"). Not available on this machine, so **untested**; adding a dependency on an external tool is an owner decision (question 2).
 
 ## 4. HTTP adapter (IMPLEMENTED in session 8, see D-015; this section is the original design)

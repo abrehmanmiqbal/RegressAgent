@@ -39,6 +39,8 @@ MAX_ADAPTERS = 64
 MAX_ARGV_ITEMS = 64
 MAX_ARGV_ITEM_LENGTH = 4096
 MAX_ENV_ALLOW = 32
+MAX_RO_BINDS = 16
+MAX_BIND_PATH = 4096
 MAX_URL_LENGTH = 2048
 MAX_ALLOW_HOSTS = 32
 MAX_HEADERS = 16
@@ -70,7 +72,7 @@ _FORBIDDEN_HEADERS = {
     "user-agent", "expect", "upgrade", "te", "trailer", "keep-alive",
 }
 _ADAPTER_KEYS = {
-    "type", "tier", "argv", "acknowledge_not_sandboxed", "timeout_seconds", "max_stdout_bytes",
+    "type", "tier", "argv", "acknowledge_not_sandboxed", "ro_binds", "timeout_seconds", "max_stdout_bytes",
     "max_stderr_bytes", "memory_limit_bytes", "env_allow", "executable_sha256",
 }
 _FORBIDDEN_ENV_NAMES = {
@@ -95,6 +97,7 @@ class AdapterConfig:
     memory_limit_bytes: int = DEFAULT_MEMORY_LIMIT_BYTES
     env_allow: tuple[str, ...] = ()
     executable_sha256: str | None = None
+    ro_binds: tuple[str, ...] = ()  # tier B only: extra host paths mounted read-only in the sandbox
 
 
 @dataclass(frozen=True)
@@ -206,16 +209,19 @@ def _parse_adapter(name: str, entry: Any) -> AdapterConfig | HttpAdapterConfig:
     if unknown:
         raise ConfigError(f"adapter {name}: unknown key(s): {_names(unknown)}")
 
-    if entry.get("acknowledge_not_sandboxed") is not True:
-        raise ConfigError(
-            f"adapter {name}: acknowledge_not_sandboxed = true is required. Tier A adapters run "
-            "the command as you, with your files and network; use them for trusted code only"
-        )
     tier = entry.get("tier")
-    if tier == "B":
-        raise ConfigError(f"adapter {name}: tier B (sandbox) is not implemented yet")
-    if tier != "A":
-        raise ConfigError(f"adapter {name}: tier must be \"A\"")
+    if tier not in ("A", "B"):
+        raise ConfigError(f"adapter {name}: tier must be \"A\" (no sandbox) or \"B\" (bubblewrap sandbox)")
+    if tier == "A":
+        if entry.get("acknowledge_not_sandboxed") is not True:
+            raise ConfigError(
+                f"adapter {name}: acknowledge_not_sandboxed = true is required. Tier A adapters run "
+                "the command as you, with your files and network; use them for trusted code only "
+                "(or use tier B)"
+            )
+        if "ro_binds" in entry:
+            raise ConfigError(f"adapter {name}: ro_binds is only used with tier B")
+    ro_binds = _parse_ro_binds(name, entry.get("ro_binds", [])) if tier == "B" else ()
 
     argv = _parse_argv(name, entry.get("argv"))
 
@@ -233,7 +239,7 @@ def _parse_adapter(name: str, entry: Any) -> AdapterConfig | HttpAdapterConfig:
 
     return AdapterConfig(
         name=name,
-        tier="A",
+        tier=tier,
         argv=argv,
         timeout_seconds=timeout,
         max_stdout_bytes=_bounded_int(
@@ -248,6 +254,7 @@ def _parse_adapter(name: str, entry: Any) -> AdapterConfig | HttpAdapterConfig:
         ),
         env_allow=_parse_env_allow(name, entry.get("env_allow", [])),
         executable_sha256=_parse_sha(name, entry.get("executable_sha256")),
+        ro_binds=ro_binds,
     )
 
 
@@ -276,6 +283,30 @@ def _parse_argv(name: str, argv: Any) -> tuple[str, ...]:
             "(no '..', no '//', no trailing '/')"
         )
     return tuple(argv)
+
+
+def _parse_ro_binds(name: str, value: Any) -> tuple[str, ...]:
+    if not isinstance(value, list) or len(value) > MAX_RO_BINDS:
+        raise ConfigError(f"adapter {name}: ro_binds must be a list of at most {MAX_RO_BINDS} paths")
+    paths: list[str] = []
+    for item in value:
+        problem = None
+        if not isinstance(item, str) or not item or len(item) > MAX_BIND_PATH:
+            problem = f"each ro_binds entry must be a path of 1-{MAX_BIND_PATH} characters"
+        elif any(ord(c) < 32 or ord(c) == 127 for c in item):
+            problem = "ro_binds paths may not contain control characters"
+        elif not item.startswith("/") or os.path.normpath(item) != item or item == "/":
+            problem = "ro_binds paths must be absolute, normalised (no '..', '//' or trailing '/') and not '/'"
+        elif any(item == root or item.startswith(root + "/") for root in ("/proc", "/dev", "/sys")):
+            problem = "ro_binds may not expose /proc, /dev or /sys"
+        elif not os.path.exists(item):
+            problem = f"ro_binds path does not exist: {item}"
+        elif item in paths:
+            problem = f"duplicate ro_binds path: {item}"
+        if problem:
+            raise ConfigError(f"adapter {name}: {problem}")
+        paths.append(item)
+    return tuple(paths)
 
 
 def _parse_timeout(name: str, entry: dict[str, Any]) -> float:

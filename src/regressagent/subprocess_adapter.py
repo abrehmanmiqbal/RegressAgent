@@ -86,6 +86,96 @@ except BaseException:
 _LAUNCHER_MARKER = b"REGRESSAGENT_LAUNCHER_FAILED"
 
 
+_SANDBOX_ROOTS = ("/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/libx32")
+_SANDBOX_CACHE: dict[str, str | None] = {}
+_USERNS_FLAG_CACHE: dict[str, bool] = {}
+
+
+def _find_bwrap() -> str | None:
+    found = shutil.which("bwrap", path=FIXED_PATH)
+    return os.path.realpath(found) if found else None
+
+
+def _supports_disable_userns(bwrap: str) -> bool:
+    if bwrap not in _USERNS_FLAG_CACHE:
+        try:
+            help_text = subprocess.run(
+                [bwrap, "--help"], capture_output=True, text=True, timeout=10, check=False
+            )
+            _USERNS_FLAG_CACHE[bwrap] = "--disable-userns" in (help_text.stdout + help_text.stderr)
+        except (OSError, subprocess.SubprocessError):
+            _USERNS_FLAG_CACHE[bwrap] = False
+    return _USERNS_FLAG_CACHE[bwrap]
+
+
+def _sandbox_flags(bwrap: str) -> list[str]:
+    """The fixed sandbox skeleton: private namespaces (incl. NO network), read-only system dirs,
+    tmpfs /tmp and /work, no capabilities. Extra host paths come only from ``ro_binds``."""
+    flags = ["--die-with-parent", "--new-session", "--unshare-all", "--cap-drop", "ALL"]
+    if _supports_disable_userns(bwrap):
+        flags += ["--unshare-user", "--disable-userns"]  # no nested user namespaces inside
+    for name in _SANDBOX_ROOTS:
+        path = "/" + name.lstrip("/")
+        if os.path.islink(path):
+            flags += ["--symlink", os.readlink(path), path]
+        elif os.path.isdir(path):
+            flags += ["--ro-bind", path, path]
+    flags += ["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--tmpfs", "/work", "--chdir", "/work"]
+    if os.path.exists("/etc/ld.so.cache"):
+        flags += ["--ro-bind", "/etc/ld.so.cache", "/etc/ld.so.cache"]
+    return flags
+
+
+def _sandbox_problem(bwrap: str) -> str | None:
+    """None if bubblewrap can build the sandbox on this machine, else a short reason (cached)."""
+    if bwrap not in _SANDBOX_CACHE:
+        try:
+            done = subprocess.run(
+                [bwrap, *_sandbox_flags(bwrap), "/usr/bin/true"],
+                capture_output=True, timeout=15, check=False,
+            )  # fmt: skip
+            reason = done.stderr.decode("utf-8", errors="replace").strip().splitlines()
+            _SANDBOX_CACHE[bwrap] = None if done.returncode == 0 else (reason[0][:160] if reason else "failed")
+        except (OSError, subprocess.SubprocessError) as exc:
+            _SANDBOX_CACHE[bwrap] = f"could not run bwrap: {type(exc).__name__}"
+    return _SANDBOX_CACHE[bwrap]
+
+
+def _sandbox_command(cfg: AdapterConfig, executable: str) -> tuple[str, list[str]]:
+    """The (program, argv) that runs the agent inside bubblewrap; refuses instead of degrading."""
+    bwrap = _find_bwrap()
+    if bwrap is None:
+        raise AdapterError(
+            "tier B needs bubblewrap (bwrap), which was not found (for example: apt install "
+            "bubblewrap); refusing to run unsandboxed"
+        )
+    problem = _sandbox_problem(bwrap)
+    if problem:
+        raise AdapterError(
+            f"bubblewrap cannot create a sandbox here ({problem}); refusing to run unsandboxed"
+        )
+    visible = (*_SANDBOX_ROOTS, *cfg.ro_binds)
+    internal = ("/tmp", "/work", "/proc", "/dev")  # exist inside the sandbox on their own
+
+    def inside(path: str, roots: tuple[str, ...]) -> bool:
+        return any(path == root or path.startswith(root.rstrip("/") + "/") for root in roots)
+
+    if not inside(executable, visible):
+        raise AdapterError(
+            "the executable is not visible inside the sandbox; add its directory to ro_binds"
+        )
+    for arg in cfg.argv[1:]:  # a script/data path that exists on the host but is not mounted
+        if arg.startswith("/") and os.path.exists(arg) and not inside(os.path.realpath(arg), (*visible, *internal)):
+            raise AdapterError(
+                "an argument path exists on the host but is not visible inside the sandbox; "
+                "add its directory to ro_binds"
+            )
+    binds: list[str] = []
+    for path in cfg.ro_binds:
+        binds += ["--ro-bind", path, path]
+    return bwrap, ["bwrap", *_sandbox_flags(bwrap), *binds, "--", executable, *cfg.argv[1:]]
+
+
 class AdapterError(Exception):
     """The adapter run failed; the message is short, single-line and safe to store."""
 
@@ -104,7 +194,7 @@ class SubprocessAdapter:
         limits = self._limits_or_none()
         meta: dict[str, Any] = {
             "adapter_name": cfg.name,
-            "adapter_tier": "A",
+            "adapter_tier": cfg.tier,
             "argv": list(cfg.argv),
             "env_names": list(cfg.env_allow),
             "timeout_seconds": float(cfg.timeout_seconds),
@@ -164,9 +254,12 @@ class SubprocessAdapter:
 
         workdir = tempfile.mkdtemp(prefix="regressagent-")
         try:
+            exec_path, exec_argv = executable, list(cfg.argv)
+            if cfg.tier == "B":
+                exec_path, exec_argv = _sandbox_command(cfg, executable)
             args = [
                 sys.executable, "-I", "-S", "-c", _LAUNCHER,
-                json.dumps(limits), json.dumps(launcher_only), executable, *cfg.argv,
+                json.dumps(limits), json.dumps(launcher_only), exec_path, *exec_argv,
             ]
             started = time.monotonic()
             try:

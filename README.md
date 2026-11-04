@@ -6,7 +6,7 @@ RegressAgent is built free-first: the core loop runs locally without paid APIs, 
 
 ## Project status
 
-Early development (alpha). Implemented, tested locally on Linux and in CI (Python 3.11 and 3.12): typed models, 11 assertion operators (including tool-call operators), SQLite persistence, before/after comparison, Markdown/JSON reports, traces (stored redacted, converted from OpenAI/Anthropic conversations), real agents through Tier A command adapters and HTTP adapters, secret redaction, a loopback-only HTTP API and a small web UI, plus the CLI below. **Not implemented / not verified:** a sandbox (Tier B), real-browser testing of the UI, macOS/Windows, HTML reports, LangChain/OpenTelemetry importers, full JSON-schema validation. See [docs/TASKS.md](docs/TASKS.md) and [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md).
+Early development (alpha). Implemented, tested locally on Linux and in CI (Python 3.11 and 3.12): typed models, 11 assertion operators (including tool-call operators), SQLite persistence, before/after comparison, Markdown/JSON reports, traces (stored redacted, converted from OpenAI/Anthropic conversations), real agents through Tier A command adapters, Tier B bubblewrap-sandboxed adapters and HTTP adapters, secret redaction, a loopback-only HTTP API and a small web UI, plus the CLI below. **Not implemented / not verified:** real-browser testing of the UI, macOS/Windows, HTML reports, LangChain/OpenTelemetry importers, full JSON-schema validation. See [docs/TASKS.md](docs/TASKS.md) and [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md).
 
 ## Install
 
@@ -163,7 +163,7 @@ env_allow = ["MY_AGENT_MODEL"]                       # optional: variable NAMES 
 
 The agent receives the case `input` as one JSON object on stdin and must print one JSON object on stdout (exit code 0). Failures (timeout, crash, non-JSON, oversized output, non-zero exit) become **recorded failed runs**, not crashes. Each run stores reproducibility metadata (executable path and SHA-256, argv, env variable *names*, limits, exit code, duration), and stored text goes through best-effort secret redaction. `--adapter` cannot be combined with `--runner`.
 
-**Tier A is NOT a sandbox.** It limits time, output size, memory and processes and starts the agent with a clean environment, but the command runs **as you**, with your files and network. Use it only for code you would run by hand anyway. Design and limits: [docs/ADAPTER_ISOLATION.md](docs/ADAPTER_ISOLATION.md).
+**Tier A is NOT a sandbox (use Tier B for that).** It limits time, output size, memory and processes and starts the agent with a clean environment, but the command runs **as you**, with your files and network. Use it only for code you would run by hand anyway. Design and limits: [docs/ADAPTER_ISOLATION.md](docs/ADAPTER_ISOLATION.md).
 
 ### Running a real agent over HTTP
 
@@ -183,6 +183,20 @@ Authorization = "MY_AGENT_TOKEN"
 ```
 
 Safety rules: the URL lives only in this file (no credentials, query or fragment in it; put secrets in `headers_env`, whose values are read from the environment at run time and never stored or printed). Non-loopback hosts must be listed in `allow_hosts` and use https. The host is resolved once, every address is checked and the connection is pinned to it: link-local (cloud metadata), unspecified, multicast and reserved addresses are always refused, and a host that is not allow-listed must resolve to loopback. Redirects are never followed; TLS certificates are always verified. The run records `adapter_tier` `H`, the URL, the HTTP status (in `exit_code`) and the header variable names. The case input is sent to that endpoint, so only point it at services you trust with that data. A full example: [`examples/regressagent.example.toml`](examples/regressagent.example.toml).
+
+### Tier B: sandboxed command adapters (Linux, needs bubblewrap)
+
+`tier = "B"` runs the same command inside **bubblewrap** (`bwrap`; `apt install bubblewrap`). Everything Tier A limits (time, output, memory, processes, clean environment) still applies, plus: private mount, PID, IPC, UTS and **network** namespaces (the agent cannot reach the network, not even the host's loopback), no capabilities, no nested user namespaces, a private tmpfs for `/tmp` and the working directory `/work`, and a filesystem that contains only `/usr`, `/bin`, `/lib*` (read-only) and the paths you list in `ro_binds` (read-only). The agent's interpreter must live under those (for example `/usr/bin/python3`; a venv or `uv` Python elsewhere is refused with a hint). If bubblewrap is missing or cannot build the sandbox on the machine (for example when unprivileged user namespaces are disabled), the run is **refused, never run unsandboxed**.
+
+```toml
+[adapters.my-sandboxed-agent]
+tier = "B"
+argv = ["/usr/bin/python3", "/opt/agent/main.py"]
+ro_binds = ["/opt/agent"]        # extra host paths, mounted read-only (max 16)
+timeout_seconds = 30
+```
+
+It is a strong boundary against ordinary misbehaviour and many attacks, but **not a guarantee**: a kernel or bubblewrap vulnerability defeats it, and it does not hide data you put in `ro_binds` or in the case input. See [docs/ADAPTER_ISOLATION.md](docs/ADAPTER_ISOLATION.md).
 
 ### Exit codes
 

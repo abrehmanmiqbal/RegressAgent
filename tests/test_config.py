@@ -106,9 +106,9 @@ def test_trust_acknowledgement_must_be_literal_true(tmp_path, value):
         load_config(write(tmp_path, adapter_toml(acknowledge_not_sandboxed=value)))
 
 
-def test_tier_b_is_refused_until_implemented(tmp_path):
-    with pytest.raises(ConfigError, match="not implemented"):
-        load_config(write(tmp_path, adapter_toml(tier='"B"')))
+def test_tier_b_is_accepted_since_the_sandbox_exists(tmp_path):
+    cfg = next(iter(load_config(write(tmp_path, adapter_toml(tier='"B"'))).adapters.values()))
+    assert cfg.tier == "B" and cfg.ro_binds == ()
 
 
 @pytest.mark.parametrize("value", ['"a"', "1", "true"])
