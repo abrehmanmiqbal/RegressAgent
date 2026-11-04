@@ -403,7 +403,8 @@ class Repository:
 
     def get_run(self, run_id: int) -> StoredRun:
         row = self._conn.execute(
-            f"SELECT {self._RUN_COLS} FROM runs WHERE run_id = ?", (run_id,)
+            f"SELECT {self._RUN_COLS} FROM runs WHERE run_id = ?",  # nosec B608: constant column list
+            (run_id,),
         ).fetchone()
         if row is None:
             raise NotFoundError(f"Run {run_id} not found")
@@ -411,6 +412,7 @@ class Repository:
 
     def list_runs(self, case_id: str) -> list[StoredRun]:
         rows = self._conn.execute(
-            f"SELECT {self._RUN_COLS} FROM runs WHERE case_id = ? ORDER BY run_id", (case_id,)
+            f"SELECT {self._RUN_COLS} FROM runs WHERE case_id = ? ORDER BY run_id",  # nosec B608
+            (case_id,),
         ).fetchall()
         return [self._row_to_run(r) for r in rows]

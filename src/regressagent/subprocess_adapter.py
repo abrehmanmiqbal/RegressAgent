@@ -120,7 +120,7 @@ def _sandbox_flags(bwrap: str) -> list[str]:
             flags += ["--symlink", os.readlink(path), path]
         elif os.path.isdir(path):
             flags += ["--ro-bind", path, path]
-    flags += ["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--tmpfs", "/work", "--chdir", "/work"]
+    flags += ["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--tmpfs", "/work", "--chdir", "/work"]  # nosec B108: path INSIDE the sandbox
     if os.path.exists("/etc/ld.so.cache"):
         flags += ["--ro-bind", "/etc/ld.so.cache", "/etc/ld.so.cache"]
     return flags
@@ -155,7 +155,7 @@ def _sandbox_command(cfg: AdapterConfig, executable: str) -> tuple[str, list[str
             f"bubblewrap cannot create a sandbox here ({problem}); refusing to run unsandboxed"
         )
     visible = (*_SANDBOX_ROOTS, *cfg.ro_binds)
-    internal = ("/tmp", "/work", "/proc", "/dev")  # exist inside the sandbox on their own
+    internal = ("/tmp", "/work", "/proc", "/dev")  # exist inside the sandbox on their own  # nosec B108: paths inside the sandbox
 
     def inside(path: str, roots: tuple[str, ...]) -> bool:
         return any(path == root or path.startswith(root.rstrip("/") + "/") for root in roots)
