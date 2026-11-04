@@ -14,7 +14,7 @@ import json
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -327,6 +327,61 @@ class Repository:
         self._conn.commit()
         if cur.rowcount == 0:
             raise NotFoundError(f"Trace '{trace_id}' not found")
+
+    # ---- dashboard -----------------------------------------------------------------
+    def overview(self, *, history: int = 20, recent: int = 10, max_cases: int = 500) -> dict[str, Any]:
+        """Cheap summary for the dashboard: counts, per-case pass history and the latest runs.
+
+        Uses the indexed ``passed`` column only (no per-run result JSON is loaded).
+        """
+        q = self._conn.execute
+        counts = {
+            "cases": q("SELECT COUNT(*) FROM cases").fetchone()[0],
+            "traces": q("SELECT COUNT(*) FROM traces").fetchone()[0],
+            "runs": q("SELECT COUNT(*) FROM runs").fetchone()[0],
+        }
+        stats = {
+            r[0]: (r[1], r[2] or 0)
+            for r in q("SELECT case_id, COUNT(*), SUM(passed) FROM runs GROUP BY case_id").fetchall()
+        }
+        past: dict[str, list[bool]] = {}
+        for case_id, passed in q(
+            "SELECT case_id, passed FROM (SELECT case_id, passed, run_id, ROW_NUMBER() OVER "
+            "(PARTITION BY case_id ORDER BY run_id DESC) AS rn FROM runs) WHERE rn <= ? "
+            "ORDER BY case_id, run_id",
+            (history,),
+        ).fetchall():
+            past.setdefault(case_id, []).append(bool(passed))
+        cases = []
+        for case_id, case_json in q(
+            "SELECT case_id, case_json FROM cases ORDER BY case_id LIMIT ?", (max_cases,)
+        ).fetchall():
+            try:
+                name = str(json.loads(case_json).get("name") or case_id)
+            except (ValueError, AttributeError):
+                name = case_id
+            total, passed_runs = stats.get(case_id, (0, 0))
+            cases.append(
+                {
+                    "case_id": case_id,
+                    "name": name,
+                    "runs": total,
+                    "passed_runs": passed_runs,
+                    "history": past.get(case_id, []),
+                }
+            )
+        latest = [
+            {
+                "run_id": r[0], "case_id": r[1], "label": r[2], "runner": r[3],
+                "passed": bool(r[4]), "created_at": r[5],
+            }
+            for r in q(
+                "SELECT run_id, case_id, label, runner_name, passed, created_at FROM runs "
+                "ORDER BY run_id DESC LIMIT ?",
+                (recent,),
+            ).fetchall()
+        ]  # fmt: skip
+        return {"counts": counts, "cases": cases, "recent": latest}
 
     # ---- runs --------------------------------------------------------------------
     def record_run(

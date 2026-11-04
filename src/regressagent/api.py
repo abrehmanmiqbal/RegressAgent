@@ -183,6 +183,9 @@ class Api:
 
         if method == "GET" and rest == ["health"]:
             return 200, {"ok": True, "version": __version__}
+        if method == "GET" and rest == ["overview"]:
+            with Repository(self._db) as repo:
+                return 200, repo.overview()
 
         with Repository(self._db) as repo:
             if rest[0] == "cases":
