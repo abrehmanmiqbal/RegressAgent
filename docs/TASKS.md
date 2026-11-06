@@ -55,6 +55,6 @@ _[x] = done AND verified by an executed check (see TEST_EVIDENCE.md). Local-only
 - [x] Clean-install verification on 3.11 and 3.12 (fresh clone, editable and wheel installs; session 8, TEST_EVIDENCE #30-33).
 
 ## Milestone 7 — Distribution readiness
-- [x] Name conflict (old name `agentproof` taken on PyPI) resolved: renamed to RegressAgent, D-016 (PyPI and GitHub names free on 2026-10-24). [x] Owner renamed the GitHub repository; URLs updated (2026-10-31). [x] Release notes DRAFT: docs/RELEASE_NOTES_0.1.0.md (not published; tag/publish needs owner authorization).
+- [x] Name conflict (old name `agentproof` taken on PyPI) resolved: renamed to RegressAgent, D-016 (PyPI and GitHub names free on 2026-10-24). [x] Owner renamed the GitHub repository; URLs updated (2026-10-31). [x] Release notes final: docs/RELEASE_NOTES_0.1.0.md (alpha pre-release). [ ] PyPI publish stays with the owner (no credentials here).
 - [x] Name conflict resolved: renamed to RegressAgent (D-016). [x] Owner renamed the GitHub repo; URLs updated (2026-10-31).
 - [x] Multi-step traces: `steps` in traces, operators `tool_called` / `tool_not_called` / `tool_order`, cases generated from steps, demo `support` action (session 9, D-018). [x] Importers for OpenAI chat and Anthropic messages conversations (`trace convert`, D-019). [ ] Replay of stored traces, LangChain/OpenTelemetry importers are NOT done.

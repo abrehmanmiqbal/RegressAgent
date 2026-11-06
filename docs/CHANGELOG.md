@@ -45,3 +45,4 @@ User-visible changes are recorded here. This project has not had a software rele
 - Security hygiene: SECURITY.md, Dependabot config (pip, npm, actions), dev dependency `pytest>=9.0.3,<10` (fixes PYSEC-2026-1845), bandit findings reviewed and annotated.
 - `GET /api/v1/overview` and `Repository.overview()` (D-023): counts, per-case pass history and latest runs for the dashboard, computed from the indexed `passed` column without loading run JSON.
 - UI v2 (D-023): sidebar shell, dashboard (stats, health tiles, sparklines, attention list, recent runs, onboarding with a demo case), case/trace detail pages with hash routing, compare view with verdict banner, tool-call timeline, command palette, keyboard shortcuts, theme toggle, toasts, skeletons, responsive and reduced-motion CSS. Still dependency-free, strict CSP, no inline styles.
+- Release 0.1.0 (alpha pre-release): final release notes in docs/RELEASE_NOTES_0.1.0.md.
