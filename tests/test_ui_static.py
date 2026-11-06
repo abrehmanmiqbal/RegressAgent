@@ -98,7 +98,15 @@ def test_index_html_has_no_inline_code_and_no_external_resources():
      "localStorage", "sessionStorage", "document.cookie", "indexedDB", "http://", "https://", "importScripts", "postMessage"],
 )  # fmt: skip
 def test_app_js_avoids_dangerous_apis(forbidden):
-    assert forbidden not in (UI / "app.js").read_text(encoding="utf-8")
+    source = (UI / "app.js").read_text(encoding="utf-8")
+    source = source.replace("http://www.w3.org/2000/svg", "")  # the SVG namespace is an identifier, not a request
+    assert forbidden not in source
+
+
+def test_app_js_never_sets_inline_styles_or_unsafe_attributes():
+    source = (UI / "app.js").read_text(encoding="utf-8")
+    assert "style:" not in source and ".style." not in source and "setAttribute(\"style\"" not in source
+    assert "javascript:" not in source and "srcdoc" not in source
 
 
 def test_app_js_takes_the_token_from_the_fragment_and_removes_it_from_the_address_bar():

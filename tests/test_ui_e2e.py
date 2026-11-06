@@ -45,4 +45,4 @@ def test_ui_end_to_end_in_jsdom(tmp_path):
         server.shutdown()
         server.server_close()
     assert done.returncode == 0, done.stdout[-4000:] + done.stderr[-2000:]
-    assert "# fail 0" in done.stdout and "# pass 6" in done.stdout
+    assert "# fail 0" in done.stdout and "# pass 10" in done.stdout

@@ -50,3 +50,4 @@
 - Local HTTP API + `serve` (D-020); tests 672 -> 718; 8 security mutations caught.
 - Local UI + jsdom e2e tests; fixed a fresh-DB migration race and 3 UI/API bugs found by them; tests 718 -> 744.
 - Tier B (bubblewrap) sandbox + probe-agent tests; tests 744 -> 776; two weak tests found by surviving mutations.
+- UI v2 (dashboard, routing, palette, shortcuts, theme), overview endpoint; tests 776 -> 782.
