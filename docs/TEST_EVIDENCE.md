@@ -216,4 +216,4 @@ Environment: Linux sandbox, Python 3.12.3, Node.js 22.23.4, Chromium 156.0.8078.
 5. `/tmp/regressagent-check/bin/regressagent demo` — **exit 0**, both assertions passed.
 6. `git diff --check` — passed.
 
-The GitHub Actions workflow was updated to install Node dependencies and Chromium on the Python 3.12 job. Its result for this change is pending the requested push; no hosted demo or public deployment was created.
+The GitHub Actions workflow installs Node dependencies and Chromium on the Python 3.12 job. After commit `abfa656` was pushed to `main`, run [42357784214](https://github.com/abrehmanmiqbal/RegressAgent/actions/runs/42357784214) completed successfully: both `test (3.11)` and `test (3.12)` passed. GitHub also reported non-failing runner/action lifecycle notices (Node.js 20 deprecation and the planned `ubuntu-latest` migration). No hosted demo or public deployment was created.

@@ -65,3 +65,11 @@
 - Re-read WebDev workflow and available tools. The server exposes init/attach/config, but no mount-repair operation; after two prior failed initializations, did not make a blind third retry or claim a demo exists.
 - Replaced the obsolete adapter-isolation draft with current Tier A, Tier B, HTTP, config, data-egress, local-API and verification boundaries. Corrected the Tier A acknowledgement rule after checking the parser: Tier B does not require that Tier A acknowledgement.
 - Corrected D-010 implementation status and D-021/D-023 browser-testing statements; exploratory headless Chromium screenshots exist, but there is no maintained real-browser/accessibility suite. Updated the task checklist and project state. No application code changed in this documentation-only continuation.
+
+
+## 2026-11-07 (UI accessibility and GitHub sync)
+
+- Added pinned development-only Playwright and axe-core dependencies plus a real Chromium audit for eight UI states. Fixed issues reported by axe: login landmark, visible button accessible names and theme color contrast. Updated the workflow to install Chromium on the Python 3.12 job.
+- Verified lockfile installation (`npm ci`, 42 packages); final local suite: **776 passed, 11 Tier B skips** (bubblewrap unavailable); Ruff clean; offline demo passed; `git diff --check` clean.
+- Owner-authorized source, test and documentation changes were committed as `abfa656` and pushed to `abrehmanmiqbal/RegressAgent:main`. GitHub Actions run [42357784214](https://github.com/abrehmanmiqbal/RegressAgent/actions/runs/42357784214) passed on Python 3.11 and 3.12. Local preview screenshots were intentionally excluded.
+- No public website or deployment was created. The public demo remains synthetic-data-only and blocked by the previous WebDev mount failure; the current API remains loopback-only and is not production SaaS.

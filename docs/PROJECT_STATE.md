@@ -5,7 +5,7 @@ _Last updated: 2026-11-07. Latest exact checks are recorded in `TEST_EVIDENCE.md
 ## Current release status
 
 - `RegressAgent` is at **0.1.0 alpha / pre-release**. It is not a production-ready public multi-user service and must not be exposed as one.
-- Repository: `abrehmanmiqbal/RegressAgent`, branch `main`; the checkout and `origin/main` were both at base commit `1c71f0c` when this update began.
+- Repository: `abrehmanmiqbal/RegressAgent`, branch `main`. The owner-authorized storage/UI hardening and browser-test update was pushed as `abfa656`; the GitHub Actions run for that commit passed on Python 3.11 and 3.12.
 
 ## Verified capabilities
 
@@ -13,7 +13,7 @@ _Last updated: 2026-11-07. Latest exact checks are recorded in `TEST_EVIDENCE.md
 - Explicit HTTP and command adapters exist. Tier A runs as the current user and is **not a sandbox**. Tier B uses bubblewrap, fails closed and has host/kernel limits.
 - Secret redaction is best-effort. Case definitions and traces can contain sensitive input; SQLite is plaintext.
 - On POSIX, file-backed SQLite databases are created or restricted to mode `0600` when opened. This protects against other local users with ordinary filesystem permissions; it is **not encryption**, does not protect against the same user/root or unprotected backups, and Windows relies on filesystem ACLs. The existing repo demo DB was restricted from `0644` to `0600`; only `regressagent case list` was run for that check.
-- The local UI now has a maintained Playwright + axe audit in real Chromium for eight selected states: login, overview auto/light/dark, cases, traces, command palette and a mobile viewport. Issues found by the audit were fixed: login main landmark, visible button names and light/dark status/accent contrast. This is sampled Chromium automation, not a full accessibility certification or independent UX review.
+- The local UI has a maintained Playwright + axe audit in real Chromium for eight selected states: login, overview auto/light/dark, cases, traces, command palette and a mobile viewport. Issues found by the audit were fixed: login main landmark, visible button names and light/dark status/accent contrast. This is sampled Chromium automation, not a full accessibility certification or independent UX review.
 
 ## Checks run in this sandbox
 
@@ -22,8 +22,8 @@ _Last updated: 2026-11-07. Latest exact checks are recorded in `TEST_EVIDENCE.md
 - `/tmp/regressagent-check/bin/python -m pytest -q`: **776 passed, 11 skipped in 39.01s**. All 11 skips are Tier B integration tests because bubblewrap is unavailable here. The full suite includes the real Chromium/axe test; it asserts eight states and zero axe violations.
 - `/tmp/regressagent-check/bin/ruff check .`: passed.
 - `/tmp/regressagent-check/bin/regressagent demo`: passed (exit 0).
-- `git diff --check`: passed. The three old dashboard preview screenshots remain untracked and are not part of the intended source update.
-- CI workflow has been configured to install Chromium and run the audit on the Python 3.12 job; the changed workflow's GitHub Actions result has not yet been observed.
+- `git diff --check`: passed. Three prior local dashboard preview screenshots were intentionally excluded from the GitHub commit.
+- GitHub Actions run [42357784214](https://github.com/abrehmanmiqbal/RegressAgent/actions/runs/42357784214) for `abfa656` completed successfully on Python 3.11 and 3.12.
 
 ## Open production-readiness work
 
@@ -35,10 +35,9 @@ _Last updated: 2026-11-07. Latest exact checks are recorded in `TEST_EVIDENCE.md
 
 ## Next concrete work
 
-1. Push the user-authorized source, test and documentation changes to the verified GitHub `main` branch and inspect the resulting Actions run.
-2. Continue reconciling historical documentation with current code.
-3. After WebDev mounting is restored, build and inspect the public synthetic-data demo; do not expose the current loopback API.
-4. Design and independently review any future multi-user/production architecture before accepting real customer inputs or credentials.
+1. Continue reconciling historical documentation with the implementation.
+2. After WebDev mounting is restored, build and inspect the public synthetic-data demo; do not expose the current loopback API.
+3. Design and independently review any future multi-user/production architecture before accepting real customer inputs or credentials.
 
 ## Constraints
 

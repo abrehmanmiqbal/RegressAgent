@@ -6,7 +6,7 @@ User-visible changes are recorded here. Version 0.1.0 is an alpha pre-release; s
 
 ## Unreleased
 - Security: file-backed SQLite databases are created or restricted to POSIX owner-only permissions (`0600`); this is not encryption and Windows relies on filesystem ACLs.
-- Verified locally on 2026-11-07: 776 tests passed and 11 Tier B sandbox tests skipped because `bwrap` is unavailable in this sandbox. Ruff and the offline demo passed. The edited CI workflow has not yet run; no public deployment was performed.
+- Verified locally on 2026-11-07: 776 tests passed and 11 Tier B sandbox tests skipped because `bwrap` is unavailable in this sandbox. Ruff and the offline demo passed. GitHub Actions run 42357784214 passed on Python 3.11 and 3.12 for commit `abfa656`; no public deployment was performed.
 - UI accessibility: add a semantic login main landmark, align button accessible names with visible labels, and raise light/dark status/accent contrast. Add a pinned Playwright + axe Chromium test covering eight UI states; CI installs Chromium on the Python 3.12 job.
 - Added: Tier A subprocess adapter (`agentproof.subprocess_adapter`), NOT a sandbox and not yet reachable from the CLI: timeouts with process-group kill, output caps, empty environment plus allow-list, temp cwd, rlimits, bad output becomes a failed result. Tested against a hostile agent.
 - Added: `agentproof.toml` loader (`agentproof.config`, parse and validate only; nothing executes yet). Strict keys, argv lists with absolute executables, mandatory `acknowledge_not_sandboxed = true`, hard limit maxima, env allow-list of names, symlink/permission/size checks. Not wired into the CLI yet.
