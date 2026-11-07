@@ -39,14 +39,15 @@ _[x] = done AND verified by an executed check (see TEST_EVIDENCE.md). Local-only
 - [x] HTTP adapter (`type = "http"`, session 8, D-015): SSRF guard, pinned connection, no redirects, TLS verified, size/deadline caps, env-var credentials.
 
 ## Milestone 4 — Usable interface
-- [x] Minimal local UI (cases, runs, compare/diff, report, traces; empty/error/loading states; D-021). UI v2 (D-023): dashboard, routing, palette, shortcuts, theme, onboarding. Tested with jsdom against the real server (10 scenarios); NOT tested in a real browser.
+- [x] Local UI (cases, runs, compare/diff, report, traces; empty/error/loading states; D-021). UI v2 (D-023): dashboard, routing, palette, shortcuts, theme, onboarding. Tested with jsdom against the real server (10 scenarios) and Playwright + axe in real Chromium (8 states: login, dashboard themes, cases, traces, palette and mobile; zero violations).
 
 ## Milestone 5 — Security and robustness
 - [x] Case files: size cap (1,000,000 bytes), JSON-only parse, typed validation, `extra=forbid`; hostile/malformed/deep-nesting/invalid-UTF-8 probes rejected cleanly.
 - [x] Regex safety (ReDoS): validation at case load, text cap, cost model, fuzzed (D-009). Assertion count capped at 100.
 - [x] Best-effort secret redaction of stored results and run metadata (src/regressagent/redaction.py; limits documented, NOT a guarantee). [x] Assertion path limits (512 chars, 32 segments, no empty segments).
+- [x] File-backed SQLite databases are created/restricted to POSIX owner-only mode `0600`; four POSIX tests cover database/journal modes and FIFO refusal (verified 2026-11-06). This is not encryption; Windows relies on filesystem ACLs.
 - [x] Tier A subprocess adapter + hostile test agent (reachable from the CLI since session 8: `run`/`run-all --adapter NAME --config FILE`). [x] HTTP adapter (D-015). [x] Tier B (bubblewrap sandbox, D-022; tested with a probe agent that tries to escape).
-- [x] Isolation design written: docs/ADAPTER_ISOLATION.md + D-010 (status PROPOSED; design only, nothing implemented/tested). [x] D-010 accepted 2026-10-18 (owner delegated answers); adapter code may now be written test-first, Linux only.
+- [x] Isolation design accepted (D-010) and implemented: `docs/ADAPTER_ISOLATION.md` documents current Tier A, Tier B and HTTP behavior; Tier B runtime tests require bubblewrap.
 - [x] Threat model doc: docs/THREAT_MODEL.md (honest status per threat; secrets redaction is best-effort only).
 
 ## Milestone 6 — Release preparation
@@ -58,3 +59,10 @@ _[x] = done AND verified by an executed check (see TEST_EVIDENCE.md). Local-only
 - [x] Name conflict (old name `agentproof` taken on PyPI) resolved: renamed to RegressAgent, D-016 (PyPI and GitHub names free on 2026-10-24). [x] Owner renamed the GitHub repository; URLs updated (2026-10-31). [x] Release notes final: docs/RELEASE_NOTES_0.1.0.md (alpha pre-release). [ ] PyPI publish stays with the owner (no credentials here).
 - [x] Name conflict resolved: renamed to RegressAgent (D-016). [x] Owner renamed the GitHub repo; URLs updated (2026-10-31).
 - [x] Multi-step traces: `steps` in traces, operators `tool_called` / `tool_not_called` / `tool_order`, cases generated from steps, demo `support` action (session 9, D-018). [x] Importers for OpenAI chat and Anthropic messages conversations (`trace convert`, D-019). [ ] Replay of stored traces, LangChain/OpenTelemetry importers are NOT done.
+
+## Milestone 8 — Production readiness and public synthetic demo (active)
+- [x] Reconcile adapter-isolation documentation and D-010/D-021/D-023 status with current code and browser-test evidence (2026-11-06/07).
+- [ ] Reconcile remaining historical docs with the implementation and verify the documentation against code.
+- [x] Add Chromium/axe accessibility coverage for eight local UI states and fix observed landmark, accessible-name and color-contrast issues; API remains loopback-only (2026-11-07).
+- [ ] Create and publish a public demo using synthetic/sample data only; no user credentials, confidential inputs or arbitrary live agent execution. **Blocked:** WebDev project mount failed twice; no project or deployment exists.
+- [ ] Before any future public multi-user service, design authentication/authorization, tenant isolation, durable storage, retention, backups, isolated agent execution, observability and incident response; get an independent security review. The current local SQLite/API app must not be exposed as-is.

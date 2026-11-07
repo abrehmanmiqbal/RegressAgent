@@ -1,7 +1,11 @@
 {
   "name": "regressagent-ui-tests",
   "private": true,
-  "description": "jsdom end-to-end tests for the local UI (run through pytest: tests/test_ui_e2e.py)",
+  "description": "jsdom end-to-end and Chromium accessibility tests for the local UI (run through pytest)",
   "type": "module",
-  "devDependencies": { "jsdom": "26.1.0" }
+  "devDependencies": {
+    "axe-core": "4.14.0",
+    "jsdom": "26.1.0",
+    "playwright": "1.65.0"
+  }
 }

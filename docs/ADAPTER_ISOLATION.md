@@ -1,68 +1,59 @@
-# Adapter Isolation Design (D-010)
+# Adapter Isolation and Trust Boundaries
 
-**Status: ACCEPTED (D-010, 2026-10-18; owner delegated the answers). Implementation in progress: section 8 step 1 (DB migration v2 + `RunMetadata`) step 2 (`regressagent.toml` loader, parse/validate only) and step 3 (hostile test agent + Tier A subprocess adapter, `src/regressagent/subprocess_adapter.py`, Linux only) are done and tested (session 7, see D-012 for refinements of this design); CLI wiring, HTTP adapter and Tier B are still unimplemented and untested.** No adapter that runs user code, commands, or network calls may be written until the owner has reviewed this document and its open questions (end of file). Environment facts checked in session 4 (Linux 6.18, container, uid 0): `resource`, `os.killpg`, `tomllib` (stdlib, Python 3.11+) are available; `unshare` exists; `bwrap`, `docker`, `podman`, `nsjail`, `firejail` are **not** installed here, so no sandbox tier below has been tried.
+_Last reviewed: 2026-11-06. Current implementation is in `config.py`, `subprocess_adapter.py` and `http_adapter.py`; detailed execution evidence is in `TEST_EVIDENCE.md`. This is design documentation, not a security certification._
 
-## 1. Problem
-Today only built-in demo runners exist. A real adapter would start the user's agent (a command or an HTTP endpoint) and feed it recorded inputs. The agent is untrusted-ish: buggy, nondeterministic, possibly compromised, and its output can be hostile. The tool itself must not become a way to run attacker-controlled code on the user's machine (D-004).
+## 1. Purpose and hard rules
 
-## 2. Hard rules (apply to every adapter)
-1. **Case files and traces never contain commands, URLs, paths to executables or environment variables.** They contain only the agent *input* and assertions. A case refers to an adapter by *name*; the mapping name -> command lives in a separate, local, user-authored config file (`regressagent.toml`, parsed with stdlib `tomllib`), never in the database or imported data.
-2. **Adapters are off by default.** Using one requires the config entry plus an explicit opt-in at run time (e.g. `--adapter NAME`); there is no implicit discovery.
-3. **No in-process execution of user code** (no `import`/`exec` of user modules, no plugin loading). Isolation is by process boundary only.
-4. **No shell.** Commands are an argv list with `shell=False`; the executable must be an absolute path (resolved with `realpath`) that exactly matches the config entry; its SHA-256 is recorded with each run.
-5. **Everything coming back is untrusted data** (D-004, D-007): bounded, parsed as JSON only, never evaluated, never fed to tools or prompts, and any failure becomes a *failed recorded result* with an `error`, not a crash.
-6. **Fail closed.** If a requested protection is unavailable (platform, missing tool), the run is refused, not silently weakened.
+Adapters let a regression case invoke an agent configured by the local operator. Case files and traces define inputs/assertions only; they never contain executable paths, commands, URLs or environment variable values. Adapters are opt-in, configured through an explicitly supplied local TOML file and selected by name on `run`/`run-all`. There is no config discovery from the current working directory.
 
-## 3. Subprocess adapter
-### Tier A: baseline guard rails (honest scope)
-Process-level limits and hygiene. **Tier A does not stop the child from reading files or using the network as the invoking user.** It is only appropriate for code the user would be willing to run by hand, and docs/CLI must say so.
-- **stdin/stdout contract:** one JSON object in on stdin; one JSON object out on stdout; exit code 0 required.
-- **Timeout:** wall-clock, default 30 s, hard max 300 s; on expiry kill the whole process group (`start_new_session=True`, then `os.killpg` SIGTERM -> short grace -> SIGKILL) and reap it. No orphan children.
-- **Output caps:** read stdout/stderr incrementally with a byte cap (stdout <= 1,000,000 to match the storage cap; stderr <= 64 KB, truncated and flagged); exceeding the cap kills the process and records a failed result. JSON parsing with a depth limit; top level must be an object.
-- **Environment:** start from an empty environment plus an explicit allow-list of variable *names* from the config (values read from the parent at run time, never stored; only the names are recorded). `PATH` is fixed. No inherited secrets (tokens, cloud credentials).
-- **Working directory:** a fresh temporary directory, deleted after the run; stdin never a TTY.
-- **Resource limits (POSIX):** `RLIMIT_CPU`, `RLIMIT_AS`, `RLIMIT_FSIZE`, `RLIMIT_NOFILE`, `RLIMIT_NPROC`, `RLIMIT_CORE=0`, applied in the child before exec. Caveats to test: `preexec_fn` is not safe with threads (prefer a tiny launcher or `prlimit`), `RLIMIT_NPROC` is per-user not per-process-tree, `RLIMIT_AS` can break some runtimes.
-- **Windows:** no rlimits/process groups equivalent without Job Objects; adapters are **unsupported on Windows** until a Job Object design exists (refuse, do not degrade).
+All adapter output and HTTP responses are untrusted JSON data. RegressAgent does not evaluate output as code. Errors, timeouts, malformed output and limit violations become failed run results. A requested command sandbox is refused if bubblewrap is absent or cannot create the sandbox; it is never silently downgraded to Tier A.
 
-### Tier B: sandbox (IMPLEMENTED in session 9, see D-022; the text below is the original design)
-Run the Tier A command inside an external sandbox: network disabled, read-only filesystem except the temp dir, no access to the home directory, dropped capabilities. Candidates: `bwrap` (bubblewrap), `nsjail`, or a container runtime (`docker`/`podman`). Requirements: fail closed if the configured sandbox binary is absent; the sandbox command line is built by RegressAgent from structured config (never from case data); one integration test per promised property (e.g. "child cannot read `~/.ssh`", "child cannot open a socket"). Not available on this machine, so **untested**; adding a dependency on an external tool is an owner decision (question 2).
+The config loader parses and validates; it does not execute commands or contact endpoints. It rejects symlink/non-regular configs, configs writable by group/others or owned by another user (root is also allowed), oversized files, unknown keys, invalid argv/URL fields and unsafe environment-variable names. Tier A command configs require `acknowledge_not_sandboxed = true`; Tier B is a separate explicit selection and does not require that Tier A acknowledgement.
 
-## 4. HTTP adapter (IMPLEMENTED in session 8, see D-015; this section is the original design)
-- Target comes from config only; default allow-list is `localhost`/`127.0.0.1`. Other hosts need an explicit entry.
-- **SSRF guard:** resolve the host, refuse loopback/private/link-local/metadata ranges unless explicitly allow-listed, re-check after redirects; redirects off by default.
-- TLS verification always on; request/response size caps; connect + total timeouts.
-- Credentials are never stored in config or the database: the config names an environment variable; header values are redacted from logs and stored metadata.
-- Uses the stdlib (`http.client`/`urllib`) unless a dependency is justified (AGENTS.md).
+## 2. Tier A subprocess adapter: process guard rails, not a sandbox
 
-## 5. Reproducibility metadata (needs DB migration v2)
-Each run records: adapter name, tier, executable path and SHA-256 (or URL host), argv, env variable *names*, timeout and limits, exit code, duration, whether stdout/stderr were truncated. This also gives the first real v1 -> v2 migration test (TASKS).
+Tier A is for code the operator would be willing to run directly. The child runs as the current user and can read that user's files and use the network. It is **not** a security boundary against a malicious or compromised agent.
 
-## 6. Secrets and output hygiene
-Before storing output/stderr, run the redaction pass planned in TASKS (not built yet). Until that exists, real adapters must carry a warning that stored outputs may contain secrets (THREAT_MODEL #8).
+The implemented guard rails are: `shell=False`; argv and executable come only from the validated local config; the executable is resolved and checked as a regular executable that is not group/world writable; its SHA-256 is recorded and an optional configured digest is enforced. The child starts with a clean environment plus fixed `PATH` and explicitly allow-listed variable names; variable values are read at run time and not recorded. A fresh temporary working directory is removed after execution.
 
-## 7. Test plan (must pass in CI on Linux before any adapter merges)
-A purpose-built **hostile test agent** (a small Python script in `tests/`) with modes, each asserting a *failed recorded result* and a clean exit, never a hang or crash:
-infinite loop (timeout kills it, no leftover processes); fork bomb / many children (process group killed); stdout flood beyond cap; stderr flood; endless output without newline; invalid UTF-8; non-JSON; JSON array instead of object; 5,000-deep JSON; huge string; exit code != 0 with valid JSON; ignores SIGTERM (SIGKILL path); prints its environment (assert no secrets or unlisted variables leak); tries to write outside the temp dir (documented as *allowed* in Tier A, asserted *blocked* in Tier B); symlink tricks in the temp dir; slow trickle output (total timeout still applies). Also: executable path mismatch / hash change is refused; config file missing/invalid is a clean exit 2; adapter use without opt-in is refused.
+A separate process group is supervised with a wall-clock deadline, incremental stdin/stdout/stderr handling, output caps, and termination/reaping of the process group on failure or normal completion. POSIX resource limits cover CPU, address space, file size, open files, core dumps and tasks; a small isolated Python launcher applies them before `exec`. The response must be UTF-8 JSON containing one bounded-depth object and the process must exit successfully. These controls reduce accidents and resource abuse but do not prevent a child from accessing the host. A descendant that calls `setsid` can escape Tier A process-group cleanup; `RLIMIT_NPROC` is per-user and is not enforced for root; executable hash checking has a time-of-check/time-of-use window. Linux is required; unsupported platforms fail closed.
 
-## 8. Implementation order (each step its own commit, test-first)
-1. DB migration v2 + run metadata model (no execution).
-2. `regressagent.toml` loader with strict validation (no execution).
-3. Hostile test agent + Tier A subprocess adapter, Linux only, tests above.
-4. CLI wiring (`--adapter`), README "what Tier A does NOT protect against" section.
-5. HTTP adapter with SSRF tests.
-6. Tier B, only after owner sign-off on question 2.
+## 3. Tier B subprocess adapter: bubblewrap isolation
 
-## 9. Non-goals
-Protecting against a kernel exploit, hardware side channels, or a malicious *user*; running adapters on Windows in the first version; deterministic replay of nondeterministic agents (we measure it with `--repeat`, we do not enforce it).
+Tier B wraps the same configured command in bubblewrap (`bwrap`) on Linux. It uses private namespaces including a network namespace, drops capabilities, exposes system roots read-only, creates private `/tmp` and `/work` tmpfs mounts, and uses `/work` as the working directory. Additional host paths may be explicitly supplied as bounded `ro_binds`; those mounts are read-only. When the installed bubblewrap supports it, nested user namespaces are disabled. The executable and existing absolute-path arguments must be visible inside the sandbox; otherwise the run is refused with a hint to configure a read-only bind.
 
-## 10. Open questions for the owner
-1. Is "Tier A is for trusted code only" acceptable as the first shipped tier, or should the first adapter wait for Tier B?
-2. May Tier B depend on an external tool (bubblewrap/Docker)? Which one is acceptable on your machines?
-3. Linux/macOS only at first (no Windows adapters)?
-4. Default limits: 30 s timeout, 1 MB stdout, 512 MB address space: OK?
+At startup, RegressAgent runs a smoke check to ensure bubblewrap can create the required environment. If it cannot (for example, host policy disables user namespaces), the adapter refuses to run. No network access is intentionally exposed inside the sandbox. The operator remains responsible for what is included in `ro_binds` and in the case input: those values are visible to the agent.
 
-### Answers (2026-10-18, accepted via D-010; owner may override)
-1. **Tier A first: yes, as "trusted code only".** The CLI and docs must say so, and an `regressagent.toml` adapter entry is refused unless it carries an explicit trust acknowledgement key. Tier A must never be described as a sandbox. Tier B follows as a separate milestone.
-2. **Tier B target: bubblewrap** (unprivileged, no daemon, small). It is an optional external tool, never a Python dependency; if it is missing the run is refused (fail closed). Docker/podman may be added later under the same rule. Each promised property needs its own integration test, and none can be claimed until bubblewrap is available and tested (not installed in the dev environment so far).
-3. **Platforms: Linux implemented and tested first.** macOS only after tests run on macOS (RLIMIT_AS is unreliable there). Windows: refuse, do not degrade.
-4. **Limits: 30 s timeout, 1 MB stdout, 512 MB address space kept as defaults.** Overridable per adapter in config up to the hard maxima (timeout 300 s); RLIMIT_AS may need raising for Node/JVM agents, which must be documented.
+Tier B is a defense-in-depth OS boundary, **not** a guarantee against kernel or bubblewrap vulnerabilities. The integration suite includes probes for network isolation, host-file visibility, read-only binds, temporary storage, environment leakage, PID namespace/capabilities, exposed filesystems, executable visibility and nested user namespaces. Those tests can skip when bubblewrap is missing or unavailable. In the 2026-11-06 sandbox run, 11 Tier B tests skipped because `bwrap` was not installed; earlier successful Tier B evidence is recorded in `TEST_EVIDENCE.md`. Re-run the suite on each supported target host rather than assuming the sandbox is available.
+
+## 4. HTTP adapter: explicit remote data egress
+
+The HTTP adapter POSTs the case input as JSON to a URL in the explicit local config. A loopback endpoint is permitted by default; other hosts require an allow-list entry and HTTPS unless the operator explicitly enables insecure HTTP. The URL cannot include credentials, query parameters or a fragment. Header values come from named environment variables; secrets are neither stored nor printed in errors.
+
+The adapter resolves the hostname once, checks every resolved address, and pins the connection to a validated address to prevent DNS rebinding. Link-local, unspecified, multicast and reserved addresses are refused; a non-loopback address must be allow-listed. Redirects are never followed and TLS certificate/hostname validation is on. Response bodies are read under a byte cap and a watchdog enforces a total request deadline.
+
+**Data leaves the local machine:** the configured endpoint receives the case input. Only send data to a provider/service approved to process it. DNS lookup time is outside the request deadline; explicitly allow-listed hosts may resolve to private ranges; there are no request retries, proxy support or client certificates. RegressAgent cannot control endpoint logging, retention or training policies. A successful HTTP response is only a candidate output; configured regression assertions still determine the test result.
+
+## 5. Local API boundary
+
+The loopback-only HTTP API runs built-in demo runners; it does not expose subprocess or HTTP adapters. Its bearer token, Host/Origin/Sec-Fetch checks and body cap protect the local UI/API surface. This is not authentication for a hosted multi-user service. Do not change the bind address or expose this API publicly as a shortcut to hosting adapters.
+
+## 6. Stored data and credentials
+
+Run results and metadata pass through best-effort redaction before persistence. Stored traces are also redacted before they are written, but case definitions are stored as supplied. Pattern-based redaction can miss unlabeled, encoded or split secrets and personal information. The SQLite database is plaintext. On POSIX, the current repository creates/restricts file-backed database files to mode `0600`; this is filesystem access control, **not encryption**, and does not protect against the same user, root, process compromise or unprotected backups. Windows relies on filesystem ACLs. Do not rely on redaction or file mode as a confidentiality guarantee.
+
+## 7. Reproducibility and failures
+
+Runs persist the adapter name/tier, executable path and hash for command adapters, argv, environment-variable names (not their values), time/limits, exit status and output-truncation information. HTTP runs record the configured URL and HTTP status, not credential values. Adapter failures are recorded as failed runs with a bounded, sanitized explanation; they do not imply a security incident was prevented.
+
+## 8. Verification and remaining work
+
+Use the relevant unit/integration tests in `tests/test_config.py`, `tests/test_subprocess_adapter.py`, `tests/test_tier_b.py` and `tests/test_http_adapter.py`, along with mutation/security evidence in `docs/TEST_EVIDENCE.md`. Current-environment skips are evidence of an unavailable test capability, not a passing sandbox test. CI for the latest local worktree, other Linux distributions/kernels, Windows filesystem ACL behavior, sustained concurrent load and an independent security review are not verified here.
+
+The current product is a local alpha. There is no public tenant/account system, hosted job isolation or production data service. A public demo must use synthetic/sample data only and must not accept credentials or execute user-supplied agents.
+
+## 9. Decisions and references
+
+D-010 records the accepted adapter design; D-012 refines Tier A implementation; D-015 defines the HTTP adapter; D-020 keeps the local API loopback-only; D-022 implements Tier B. These decisions are historical records; current behavior and limitations are defined by the source code and the verification evidence, not by old implementation-status wording.
+
+Examples: [`examples/regressagent.example.toml`](../examples/regressagent.example.toml), [README adapter sections](../README.md), [Threat Model](THREAT_MODEL.md), [Test Evidence](TEST_EVIDENCE.md).

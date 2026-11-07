@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
+import stat
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Self
@@ -180,16 +182,32 @@ def _columns_to_metadata(run_id: int, cols: tuple) -> RunMetadata | None:
         raise StorageError(f"Stored adapter metadata for run {run_id} is invalid") from exc
 
 
+def _secure_database_file(path: str) -> None:
+    """Create or restrict a file-backed SQLite database to owner-only mode on POSIX."""
+    if os.name != "posix" or path == ":memory:":
+        return
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NONBLOCK", 0)
+    fd = os.open(path, flags, 0o600)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError("database path is not a regular file")
+        os.fchmod(fd, 0o600)
+    finally:
+        os.close(fd)
+
+
 class Repository:
     def __init__(self, path: str | Path = ":memory:", *, redactor: Redactor | None = None) -> None:
         # ``None`` means: build a Redactor from the live environment at each record_run, so
         # secrets exported after the Repository was opened are still caught.
         self._redactor = redactor
         try:
-            self._conn = sqlite3.connect(str(path))
+            db_path = str(path)
+            _secure_database_file(db_path)
+            self._conn = sqlite3.connect(db_path)
             self._conn.execute("PRAGMA foreign_keys = ON")
             self._migrate()
-        except sqlite3.Error as exc:
+        except (OSError, sqlite3.Error) as exc:
             conn = getattr(self, "_conn", None)
             if conn is not None:
                 conn.close()

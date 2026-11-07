@@ -1,25 +1,47 @@
 # Project State
 
-_Last updated: 2026-10-18 (session 7: schema v2, secret redaction, config loader and Tier A subprocess adapter added; 356 tests on Python 3.13.16; the rest of this file still describes session 4). Everything below marked "verified" was executed in this session; see TEST_EVIDENCE.md for exact commands/output._
+_Last updated: 2026-11-07. Latest exact checks are recorded in `TEST_EVIDENCE.md`._
 
-## Verified status
-- Repository: abrehmanmiqbal/RegressAgent (renamed from AgentProof by the owner). Local clone built and tested on **Python 3.12.3 / Linux** only. Python 3.11.15 (installed via uv) and 3.12.3 are both run locally; GitHub CI (3.11 + 3.12) is also green. Renamed AgentProof -> RegressAgent in session 9 (D-016); the GitHub repo still carries the old name until the owner renames it.
-- `pytest`: **782 passed** (3.12.3 and 3.11.15 locally; CI 3.11 + 3.12 green on c323adf and 059bdc6; session 9). `ruff check .`: **clean**. `regressagent demo`: exit 0. Black-box CLI loop via the installed `regressagent` binary verified (before fails -> after passes -> verdict `improved`).
-- Implemented and tested: typed models; provider-neutral runner protocol + deterministic offline runners (`local`, `local-legacy`); assertion engine (equals/not_equals/contains/exists/gt/lt/matches_type/regex; regex is restricted, see D-009; dot paths, list indices, type-strict bool/int equality); regression engine (runner exceptions and non-dict output become failed results, never crashes); SQLite persistence (versioned migrations, case content hashes, size limits, parameterized SQL, cascade delete); assertion-level before/after comparison (`improved` / `regressed` / `unchanged`); CLI: `demo`, `case add|list|show`, `run`, `runs`, `compare`, `report` (exit 1 on regression), `case delete --yes`, `run-all [--repeat N]`, `report --output/--force`, `run --repeat N`; Markdown/JSON report rendering (`report.py`).
-- Docs: README has full CLI/operator/limits documentation; `examples/` exists (tests keep it valid).
-- Docs: THREAT_MODEL.md; ADAPTER_ISOLATION.md (D-010, proposed, design only).
-- NOT implemented: HTTP API, UI, report file export / HTML reports, trace import/capture, real-agent adapters (subprocess/HTTP), JSON-schema assertions, CHANGELOG-level release docs. (LICENSE = MIT and CONTRIBUTING.md added 2026-10-18; threat-model doc exists.)
+## Current release status
 
-## Commits
-Session 2 work was pushed to GitHub `main` in session 3 (remote head verified with `git ls-remote`: d5b6852 -> e9e4ac4). Session 3 added the `report` command on top.
-Session 2 commits: 9d1146a hardening fixes, f3ae004 storage, 6eeb09b comparison, fe75aa6 CLI + corrupt-DB fix, e1827bf ruff dev dep/CI step, lint fixes, docs. Base on GitHub: d5b6852.
+- `RegressAgent` is at **0.1.0 alpha / pre-release**. It is not a production-ready public multi-user service and must not be exposed as one.
+- Repository: `abrehmanmiqbal/RegressAgent`, branch `main`; the checkout and `origin/main` were both at base commit `1c71f0c` when this update began.
 
-## Blockers
-None known. Push access uses a short-lived owner-provided token (expires ~2026-10-21); if a push returns 401/403, ask the owner for a new token. Token is never stored.
+## Verified capabilities
 
-## Current milestone
-Milestone 1 verified. Milestone 2 core (persistence, rerun, comparison) done locally. Milestone 3 CLI partly done.
+- Provider-neutral regression core, deterministic offline runners, typed cases/results, assertion operators, bounded trace conversion, SQLite persistence, comparisons, repeated runs, reports, CLI, loopback-only HTTP API and local UI.
+- Explicit HTTP and command adapters exist. Tier A runs as the current user and is **not a sandbox**. Tier B uses bubblewrap, fails closed and has host/kernel limits.
+- Secret redaction is best-effort. Case definitions and traces can contain sensitive input; SQLite is plaintext.
+- On POSIX, file-backed SQLite databases are created or restricted to mode `0600` when opened. This protects against other local users with ordinary filesystem permissions; it is **not encryption**, does not protect against the same user/root or unprotected backups, and Windows relies on filesystem ACLs. The existing repo demo DB was restricted from `0644` to `0600`; only `regressagent case list` was run for that check.
+- The local UI now has a maintained Playwright + axe audit in real Chromium for eight selected states: login, overview auto/light/dark, cases, traces, command palette and a mobile viewport. Issues found by the audit were fixed: login main landmark, visible button names and light/dark status/accent contrast. This is sampled Chromium automation, not a full accessibility certification or independent UX review.
+
+## Checks run in this sandbox
+
+- Python 3.12.3/Linux arm64; Node.js 22.23.4; Chromium 156.0.8078.73.
+- `npm ci --no-audit --no-fund` in `ui-tests/`: succeeded from the lockfile (42 packages installed).
+- `/tmp/regressagent-check/bin/python -m pytest -q`: **776 passed, 11 skipped in 39.01s**. All 11 skips are Tier B integration tests because bubblewrap is unavailable here. The full suite includes the real Chromium/axe test; it asserts eight states and zero axe violations.
+- `/tmp/regressagent-check/bin/ruff check .`: passed.
+- `/tmp/regressagent-check/bin/regressagent demo`: passed (exit 0).
+- `git diff --check`: passed. The three old dashboard preview screenshots remain untracked and are not part of the intended source update.
+- CI workflow has been configured to install Chromium and run the audit on the Python 3.12 job; the changed workflow's GitHub Actions result has not yet been observed.
+
+## Open production-readiness work
+
+- The API binds to loopback only and has no user accounts or tenant isolation. A public multi-user service needs a separate authentication, authorization, storage and agent-execution design; merely changing the bind address is unsafe.
+- No database-at-rest encryption, retention/pruning, backup/restore workflow or independent security audit is verified. Redaction does not guarantee that secrets or personal data are removed.
+- Tier A is intentionally unsandboxed; Tier B isolation depends on the host kernel and bubblewrap. Public arbitrary agent-code execution is not part of the current local API.
+- The owner selected a **public demo with synthetic data only**. WebDev initialization failed twice at its `mount` step; no WebDev project, preview or deployment exists. The public demo remains blocked on that platform issue. Do not claim it is hosted or free-to-run until publication and actual provider costs are confirmed.
+- Remaining historical notes still need reconciliation. The UI still needs independent UX review and broader browser/manual assistive-technology evaluation.
+
+## Next concrete work
+
+1. Push the user-authorized source, test and documentation changes to the verified GitHub `main` branch and inspect the resulting Actions run.
+2. Continue reconciling historical documentation with current code.
+3. After WebDev mounting is restored, build and inspect the public synthetic-data demo; do not expose the current loopback API.
+4. Design and independently review any future multi-user/production architecture before accepting real customer inputs or credentials.
 
 ## Constraints
-- Free-first, offline-capable core; no paid API/hosting/accounts for core features.
-- Never claim results not executed; no secrets committed; do not execute traces; do not publish without authorization.
+
+- Keep the core free-first and offline-capable; use synthetic data in public demos.
+- Do not expose the current local API, accept confidential public-demo inputs, or claim a security guarantee without evidence.
+- Never execute imported traces; never commit secrets.

@@ -1,48 +1,29 @@
-# Threat Model (session 4, 2026-10-18)
+# Threat Model
 
-Scope: the current code (CLI + SQLite + deterministic demo runners). Adapters that run real agents, an HTTP API and a UI do **not exist yet**; their threats are listed as *future* and must be re-assessed (see D-010). "Mitigated" means a test or an executed probe exists (see TEST_EVIDENCE.md); it does not mean "proven secure". No independent security review has been done.
+_Last reviewed: 2026-11-06. See `TEST_EVIDENCE.md` for exact executed checks. This is an engineering threat model, not a security certification._
 
-## Assets
-- Integrity of regression verdicts (a false pass is the worst failure, per D-003).
-- The user's machine (no code from case files/traces may run on it).
-- Stored runs in the SQLite file (may contain whatever the agent output, including secrets or personal data).
-- Availability of the CLI (no hangs/crashes from hostile input).
+## Assets and trust boundaries
 
-## Trust boundaries (all of these are untrusted data)
-1. Case JSON files given to `case add`.
-2. Agent/runner output (today only demo runners; later real agents).
-3. Contents of an existing SQLite file passed via `--db`.
-4. Strings echoed into reports (case ids, paths, expected/actual values).
+Protected assets include saved test inputs, traces, agent outputs, adapter configuration, environment credentials, and the user's local files/network accessible to configured commands. Treat case JSON, imported trace JSON, database contents, runner output, HTTP responses, IDs, and report values as untrusted. The local operator is trusted to choose the database path and configured adapters, but a configured adapter target is not inherently trustworthy.
 
-Trusted: the person running the CLI (they choose file paths, `--db`, `--output`).
+## Current mitigations and residual risks
 
-## Threats and status
+| Threat | Current mitigation | Residual risk / status |
+|---|---|---|
+| Malformed, oversized, deeply nested case or trace input | Byte/depth/field limits, strict JSON parsing, typed validation, bounded assertions and paths; hostile-input tests | Nested model input remains subject to interpreter limits; generated cases need human review. |
+| Trace or case contents causing code execution | Case and trace contents are parsed as data; imported content is not executed. Adapters are invoked only through explicit local configuration. | Tier A commands run as the current user and can use that user's files/network. Never treat a user-supplied adapter config as safe. |
+| Tier B sandbox escape or resource abuse | Bubblewrap namespaces, read-only filesystem binds, no network/capabilities, limits and fail-closed behavior; hostile probes and mutation checks are documented in test evidence. | Not a guarantee against kernel/bubblewrap bugs. Tier B checks are skipped where the local host cannot create a sandbox; verify on the target host. |
+| HTTP adapter SSRF and data egress | Host allow-listing, resolved-address checks, pinned connection, no redirects, TLS verification, response-size and total-deadline caps. | Case input is sent to the configured endpoint. DNS resolution itself is not bounded, and endpoint/provider retention terms are outside RegressAgent's control. |
+| Local API access, CSRF, DNS rebinding and oversized bodies | Loopback-only binding, random bearer token, Host/Origin/Sec-Fetch checks, no CORS, size cap, generic errors, API does not run adapters. | No TLS or rate limit. Any process that can read the terminal output can obtain the token. There is no user login or tenant isolation; do not expose as a public service. |
+| UI XSS and token exposure | Static CSP, text-only rendering, token kept in memory after URL-fragment parsing, jsdom/static guard tests. | Maintained real-browser rendering, accessibility and browser-extension threat coverage remain incomplete. |
+| Secrets or personal data persisted in cases/results/traces | Best-effort pattern redaction for stored results/metadata and traces; on POSIX the SQLite database file is created/restricted to mode `0600`. | Redaction can miss unlabeled, encoded or split secrets and personal data; case definitions are stored as given. The database is plaintext. Mode `0600` is not encryption and does not protect against same-user/root access or unprotected backups. Windows relies on filesystem ACLs. |
+| SQL injection and database corruption | Parameterized SQL, explicit atomic migrations, schema-version checks, payload limits and tampered-row validation. | Large-database and concurrent-load behavior has not been characterized as a hosted database. |
+| Path abuse / report output | Explicit CLI paths, validation, overwrite confirmation for reports, bounded reads. | User-selected `--force` output paths can follow symlinks; special-file handling is not fully hardened. |
+| Dependency / release supply chain | CI, dependency update configuration, lint/test workflow and prior reviewed scans are recorded in test evidence. | Python dependencies are not hash-locked; action pins are not all commit-SHA pins; independent security audit and current-commit CI are not verified. |
+| Flaky agent behavior | Repeat-run stability summaries and assertion-level comparisons. | Stability of the configured assertions is not a guarantee of model quality or semantic correctness. |
 
-| # | Threat | Status | Mitigation / evidence | Gap |
-|---|---|---|---|---|
-| 1 | Oversized, malformed, deeply nested, or non-UTF-8 case file | Mitigated | 1,000,000-byte read cap, JSON-only parse, typed models with `extra=forbid`, 100-assertion cap; hostile probes exit 2 cleanly (TEST_EVIDENCE s2 #9) | `input`/`expected` nesting is only bounded by Python's recursion limit (which is caught); assertion paths are now limited to 512 chars / 32 segments (session 9) |
-| 1b | Hostile trace file given to `case from-trace` | Mitigated | Strict JSON, 1 MB read cap, depth 32, no NaN/Infinity, errors never echo trace values, secret-looking values never copied, generated paths capped at 512 chars; probes: 200k-deep nesting exit 2 in 0.2 s, 60k-key trace exit 2 in 0.75 s | Brittle generated assertions need human review; secret detection is best-effort |
-| 1c | Secrets in stored traces | Mitigated (best effort) | Traces are redacted before they are written (schema v3); tests scan the raw DB file for the secrets; black-box check found 0 occurrences | Pattern based: an unusual secret format can still be stored |
-| 1d | Local HTTP API reachable by other processes / web pages (DNS rebinding, CSRF, token guessing, oversized bodies) | Mitigated | Loopback-only bind, random token, Host/Origin/Sec-Fetch-Site checks, 1 MB cap, no CORS, generic 500; 8 mutation checks of these layers all caught by tests | No TLS and no rate limiting; any local process that reads the terminal output can see the token; adapters are intentionally not runnable via API |
-| 1e | XSS / token theft through the UI (hostile case names, trace ids, outputs) | Mitigated (jsdom-tested) | textContent only, strict CSP, no storage APIs, token only in fragment then memory; tests render `<img onerror>`/`<script>` payloads from case and trace data and assert nothing executes; static guard tests forbid innerHTML/eval/storage/external URLs | Not tested in a real browser; a malicious browser extension or local process with terminal access can still read the token |
-| 1f | Hostile/buggy agent command escaping or exfiltrating (Tier B) | Mitigated (tested) | bubblewrap: private ns incl. network, no caps, no nested userns, read-only minimal fs, tmpfs cwd, fail-closed; a probe agent that tries network, host file reads, writes, tmp persistence, env, pids, caps, nested userns; 9 mutations of the flags all caught | Not a guarantee (kernel/bwrap bugs); Tier A remains unsandboxed; CI cannot run these tests where user namespaces are blocked |
-| 2 | Code execution through a case/trace | Mitigated by construction | No `eval`/`exec`/`subprocess`/`pickle`/dynamic import in `src/` (grep, session 4); case data is only parsed as JSON | `src/regressagent/subprocess_adapter.py` (Tier A, D-012) is the ONLY place that starts a process (`shell=False`, argv from the validated local config, never from case data); it exists but is not reachable from the CLI yet. It is not a sandbox: the child can read your files and use the network (tests assert this on purpose) |
-| 3 | ReDoS via `regex` assertions | Partially mitigated | Static validation + 200-char / 5,000-char caps (D-009); fuzz: slowest accepted 0.73-0.81 s, no 30 s timeouts | Estimate, not proof; no hard timeout possible in-process; worst case per assertion is about 1 s x up to 100 assertions per case |
-| 4 | Report/Markdown injection (pipes, newlines, HTML, huge values) | Mitigated for Markdown/JSON | Values length-limited, whitespace-collapsed, HTML-entity escaped; golden-file + injection tests | HTML reports do not exist; if added, re-assess |
-| 5 | SQL injection | Mitigated | All user data bound as parameters; the only f-strings in SQL interpolate internal constants; injection-like ids tested | None known |
-| 6 | Corrupt or newer-schema database | Mitigated | Clear exit 2 (no traceback); newer or negative schema version refused; versioned atomic migrations; real v1->v2 upgrade tested (session 7); tampered metadata columns give a clean `StorageError` | Large databases and concurrent migration untested |
-| 7 | Runner output too large to store | Mitigated (session 4) | Recorded as a failed run with an explanatory error instead of crashing/losing the run (test added) | Runner CPU/memory use is not limited (demo runners only) |
-| 8 | Secrets / personal data in stored outputs | **Partially mitigated (best-effort)** | `redaction.py`: all stored results and run metadata pass one chokepoint (`Repository.record_run`); redacts values of secret-named env vars (>= 8 chars), well-known token formats, secret-named assignments and keys, URL passwords, PEM keys | NOT a guarantee: misses unlabeled/encoded/split secrets and personal data; the case file itself is stored as given; DB is plaintext with default permissions. Do not run real agents with sensitive data yet |
-| 9 | Path abuse via `--output` / `case add FILE` | Partially mitigated | `report --output` refuses to overwrite without `--force`; read errors are clean exit 2 | `--force` follows symlinks; reading a FIFO/special file path is untested and could block. Acceptable only because the user chooses the paths |
-| 10 | Concurrent access to one SQLite file | Not verified | SQLite's own locking | Not tested |
-| 11 | Supply chain | Partial | One runtime dependency (`pydantic>=2.6,<3`); CI uses pinned major versions of actions | Session 9: bandit (medium+): 0 open findings after review (4 false positives annotated: constant SQL column list, sandbox-internal /tmp paths); pip-audit: only pip 24.0 tooling and dev-only pytest (bumped to >=9.0.3); npm audit: 0 vulnerabilities; SECURITY.md and Dependabot config added. Still: no lock file for Python, no hash pinning, actions not pinned by SHA; regex analysis relies on private `re._parser` (fails closed if missing) |
-| 12 | Flaky/nondeterministic agents hiding as passes | Partially mitigated | `run --repeat` and `run-all --repeat` report `stable` | Only meaningful with a real nondeterministic agent (none exists yet) |
-| 13 | Terminal noise: `BrokenPipeError` traceback when output is piped into `head` | Known, cosmetic | Observed in session 3 | Not fixed |
+## Production boundaries
 
-## Future threats (not yet applicable)
-- Adapters executing user commands/code (sandbox escape, resource exhaustion, env/secret leakage, output injection). The HTTP adapter now exists (D-015): SSRF guard with pinned connection, no redirects, TLS verified, response cap and total deadline; remaining risks: the endpoint receives the case input (data leaves the machine if the host is remote), DNS lookup time is unbounded, allow-listed hosts may resolve to private ranges. Tier A subprocess adapter: built and tested against a hostile agent for hangs, floods, orphan children, env leakage, bad output and limits (see TEST_EVIDENCE); NOT covered: filesystem/network access of the child, setsid escapes, a file swapped between hash check and launch, RLIMIT_NPROC as root. HTTP adapter (SSRF) and Tier B: not built.
-- HTTP API: authentication, CSRF, local-only bind, request size limits.
-- Trace import: untrusted large/nested files; prompt-injection text inside traces is data and must never be executed or fed to tools.
+The current product is a local alpha tool: local SQLite, loopback-only UI/API, no public account system, no tenant separation, no durable hosted data service, no backup/restore/retention service, and no independent security review are verified. A public demo selected by the owner must use synthetic/sample data only and must not accept credentials or run arbitrary user agent code. Public demo project initialization is currently blocked by a WebDev `mount` failure; no deployment exists.
 
-## Process note
-A short-lived GitHub token was provided by the owner for pushing. It is used only inline in a single `git push` command, never written to files, git config, docs, or logs.
+For data not intended to leave the user's control, run locally and do not use an external model/HTTP endpoint. RegressAgent does not promise that secret redaction, local file permissions, or any sandbox provides zero-risk confidentiality.

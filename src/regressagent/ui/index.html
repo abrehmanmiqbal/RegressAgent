@@ -10,7 +10,7 @@
 <body>
   <a class="skip" href="#main">Skip to content</a>
 
-  <div id="login" class="login" hidden>
+  <main id="login" class="login" hidden>
     <form id="login-card" class="card login-card" autocomplete="off">
       <div class="logo" id="login-logo" aria-hidden="true"></div>
       <h1>RegressAgent</h1>
@@ -20,7 +20,7 @@
       </label>
       <button type="submit" id="token-save" class="btn primary">Connect</button>
     </form>
-  </div>
+  </main>
 
   <div id="shell" class="shell" hidden>
     <aside class="sidebar" aria-label="Primary">
@@ -34,10 +34,10 @@
     </aside>
     <div class="content">
       <header class="topbar">
-        <button type="button" id="palette-open" class="search-trigger" aria-label="Search and commands (Ctrl+K)">
+        <button type="button" id="palette-open" class="search-trigger">
           <span class="muted">Search cases, traces, actions…</span><span><kbd>Ctrl</kbd> <kbd>K</kbd></span>
         </button>
-        <button type="button" id="theme-toggle" class="btn ghost" aria-label="Switch theme">Theme: auto</button>
+        <button type="button" id="theme-toggle" class="btn ghost">Theme: auto</button>
         <span id="conn" class="chip ok">connected</span>
       </header>
       <main id="main" tabindex="-1"></main>

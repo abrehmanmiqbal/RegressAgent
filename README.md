@@ -6,7 +6,7 @@ RegressAgent is built free-first: the core loop runs locally without paid APIs, 
 
 ## Project status
 
-Early development (alpha). Implemented, tested locally on Linux and in CI (Python 3.11 and 3.12): typed models, 11 assertion operators (including tool-call operators), SQLite persistence, before/after comparison, Markdown/JSON reports, traces (stored redacted, converted from OpenAI/Anthropic conversations), real agents through Tier A command adapters, Tier B bubblewrap-sandboxed adapters and HTTP adapters, secret redaction, a loopback-only HTTP API and a small web UI, plus the CLI below. **Not implemented / not verified:** real-browser testing of the UI, macOS/Windows, HTML reports, LangChain/OpenTelemetry importers, full JSON-schema validation. See [docs/TASKS.md](docs/TASKS.md) and [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md).
+Early development (alpha). Implemented, tested locally on Linux and in CI (Python 3.11 and 3.12): typed models, 11 assertion operators (including tool-call operators), SQLite persistence, before/after comparison, Markdown/JSON reports, traces (stored redacted, converted from OpenAI/Anthropic conversations), real agents through Tier A command adapters, Tier B bubblewrap-sandboxed adapters and HTTP adapters, secret redaction, a loopback-only HTTP API and a small web UI, plus the CLI below. A maintained Chromium + axe accessibility test covers eight UI states; this is not a full accessibility certification or independent UX review. **Not implemented / not verified:** browser coverage beyond Chromium, macOS/Windows, HTML reports, LangChain/OpenTelemetry importers, full JSON-schema validation. See [docs/TASKS.md](docs/TASKS.md) and [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md).
 
 ## Install
 
@@ -125,7 +125,17 @@ Runners (`--runner`): `local` (default; deterministic offline demo agent) and `l
 
 ### Local UI
 
-`regressagent serve` also serves a small web UI. Open the **"Open the UI"** link it prints (`http://127.0.0.1:PORT/#token=...`): the token travels in the URL fragment (never sent to the server), is removed from the address bar at once and lives in page memory only. The UI (v2) has a **dashboard** (stats, per-case health tiles with pass/fail sparklines, "needs attention", recent runs, a first-run onboarding with a one-click demo case), readable **case pages** (assertions table, run history, side-by-side compare with a verdict banner and per-assertion before/after values, copyable Markdown report), **trace pages** (input/output and a tool-call timeline, preview/save a case), deep-linkable routes (`#/cases/ID`, back/forward work), a **command palette** (`Ctrl/Cmd+K`), keyboard shortcuts (`g o`/`g c`/`g t`, `/`, `?`), light/dark/auto theme, toasts, skeleton loaders, responsive layout, reduced-motion support and skip-link/ARIA basics. It is plain HTML/CSS/JS served from the same origin under a strict Content-Security-Policy (no inline code, no external resources, no `innerHTML`). It was tested end to end with jsdom against the real server (`ui-tests/`, run by `pytest`, which installs the pinned jsdom with `npm ci` when Node is available), **not in a real browser**.
+`regressagent serve` also serves a small web UI. Open the **"Open the UI"** link it prints (`http://127.0.0.1:PORT/#token=...`): the token travels in the URL fragment (never sent to the server), is removed from the address bar at once and lives in page memory only. The UI (v2) has a **dashboard** (stats, per-case health tiles with pass/fail sparklines, "needs attention", recent runs, a first-run onboarding with a one-click demo case), readable **case pages** (assertions table, run history, side-by-side compare with a verdict banner and per-assertion before/after values, copyable Markdown report), **trace pages** (input/output and a tool-call timeline, preview/save a case), deep-linkable routes (`#/cases/ID`, back/forward work), a **command palette** (`Ctrl/Cmd+K`), keyboard shortcuts (`g o`/`g c`/`g t`, `/`, `?`), light/dark/auto theme, toasts, skeleton loaders, responsive layout, reduced-motion support and skip-link/ARIA basics. It is plain HTML/CSS/JS served from the same origin under a strict Content-Security-Policy (no inline code, no external resources, no `innerHTML`). The UI has jsdom end-to-end tests against the real server and a Playwright + axe audit in real Chromium covering login, overview in auto/light/dark themes, cases, traces, the command palette and a mobile viewport. The GitHub Actions workflow is configured to run the browser audit; its scope is sampled Chromium states, not a cross-browser certification.
+
+Optional local Chromium accessibility check (Node.js/npm and Chromium required):
+
+```bash
+cd ui-tests
+npm ci
+npx playwright install chromium
+cd ..
+pytest -q tests/test_ui_browser.py
+```
 
 ### Local HTTP API
 
@@ -211,6 +221,8 @@ A runner result larger than 1,000,000 bytes is not lost: it is recorded as a fai
 ## Security principles
 
 Recorded inputs, traces, and case files are data, not code. RegressAgent must not execute arbitrary imported traces, and any adapter that runs user code or commands needs a documented isolation design first ([docs/DECISIONS.md](docs/DECISIONS.md)). Never commit secrets or real personal/medical data. See [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) for what is and is not mitigated (notably: stored outputs get best-effort secret redaction only, which is not a guarantee). RegressAgent is released under the [MIT License](LICENSE) (D-011); see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+On POSIX, a file-backed SQLite database is created or restricted to owner-only permissions (`0600`) when opened. This is access control, **not encryption**: another process running as the same user, root, or anyone with access to an unprotected backup can still read the data. Windows relies on the database directory's filesystem ACLs. The database can contain test inputs, traces, and agent outputs; keep it and its backups in a protected location, and do not treat redaction as a guarantee.
 
 ## Development
 

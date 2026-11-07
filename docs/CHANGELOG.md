@@ -2,9 +2,12 @@
 
 > **Naming note (D-016):** the project was renamed from AgentProof to RegressAgent on 2026-10-24. Entries below that mention `agentproof`, `AGENTPROOF_DB` or `agentproof.toml` record what was actually run under the old name and are kept as written.
 
-User-visible changes are recorded here. This project has not had a software release yet.
+User-visible changes are recorded here. Version 0.1.0 is an alpha pre-release; see `RELEASE_NOTES_0.1.0.md`.
 
 ## Unreleased
+- Security: file-backed SQLite databases are created or restricted to POSIX owner-only permissions (`0600`); this is not encryption and Windows relies on filesystem ACLs.
+- Verified locally on 2026-11-07: 776 tests passed and 11 Tier B sandbox tests skipped because `bwrap` is unavailable in this sandbox. Ruff and the offline demo passed. The edited CI workflow has not yet run; no public deployment was performed.
+- UI accessibility: add a semantic login main landmark, align button accessible names with visible labels, and raise light/dark status/accent contrast. Add a pinned Playwright + axe Chromium test covering eight UI states; CI installs Chromium on the Python 3.12 job.
 - Added: Tier A subprocess adapter (`agentproof.subprocess_adapter`), NOT a sandbox and not yet reachable from the CLI: timeouts with process-group kill, output caps, empty environment plus allow-list, temp cwd, rlimits, bad output becomes a failed result. Tested against a hostile agent.
 - Added: `agentproof.toml` loader (`agentproof.config`, parse and validate only; nothing executes yet). Strict keys, argv lists with absolute executables, mandatory `acknowledge_not_sandboxed = true`, hard limit maxima, env allow-list of names, symlink/permission/size checks. Not wired into the CLI yet.
 - Added: best-effort secret redaction of everything stored in run history (outputs, errors, assertion values, adapter metadata); the CLI now prints the stored (redacted) result. Not a guarantee, see docs/THREAT_MODEL.md #8.

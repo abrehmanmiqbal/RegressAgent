@@ -1,4 +1,6 @@
+import os
 import sqlite3
+import stat
 
 import pytest
 
@@ -151,6 +153,54 @@ def test_file_database_persists_across_connections(tmp_path):
     with Repository(path) as repo:
         assert repo.get_case("c1") == case
         assert len(repo.list_runs("c1")) == 1
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX file permission semantics")
+def test_new_file_database_has_owner_only_permissions_even_with_permissive_umask(tmp_path):
+    path = tmp_path / "private.db"
+    old_umask = os.umask(0)
+    try:
+        with Repository(path) as repo:
+            assert repo.schema_version == SCHEMA_VERSION
+    finally:
+        os.umask(old_umask)
+
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX file permission semantics")
+def test_opening_existing_file_database_restricts_its_permissions(tmp_path):
+    path = tmp_path / "existing.db"
+    with Repository(path):
+        pass
+    path.chmod(0o644)
+
+    with Repository(path):
+        pass
+
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX file permission semantics")
+def test_rollback_journal_has_owner_only_permissions(tmp_path):
+    path = tmp_path / "journal.db"
+    with Repository(path) as repo:
+        repo._conn.execute("CREATE TABLE scratch (value INTEGER)")
+        repo._conn.commit()
+        repo._conn.execute("INSERT INTO scratch VALUES (1)")
+        journal = path.with_name(path.name + "-journal")
+        assert journal.exists()
+        assert stat.S_IMODE(journal.stat().st_mode) == 0o600
+        repo._conn.rollback()
+
+
+@pytest.mark.skipif(os.name != "posix" or not hasattr(os, "mkfifo"), reason="POSIX FIFO support")
+def test_special_file_database_path_is_refused(tmp_path):
+    fifo = tmp_path / "database.fifo"
+    os.mkfifo(fifo)
+
+    with pytest.raises(StorageError, match="regular file"):
+        Repository(fifo)
 
 
 def test_database_from_newer_version_is_refused(tmp_path):

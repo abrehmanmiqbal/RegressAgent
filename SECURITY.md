@@ -19,7 +19,9 @@ maintainer), but reports are taken seriously.
 
 ## Known limits (not vulnerabilities by themselves)
 See `docs/THREAT_MODEL.md`: Tier A is deliberately not a sandbox; redaction is best-effort pattern matching;
-the API has no TLS (loopback only) and no rate limiting; a kernel or bubblewrap bug defeats Tier B.
+the SQLite database is plaintext (POSIX mode `0600` is not encryption); the API has no TLS (loopback only)
+and no rate limiting; a kernel or bubblewrap bug defeats Tier B. Do not expose the current local API as a
+public multi-user service.
 
 ## Supported versions
 Only the latest commit on `main` (pre-1.0, alpha).
@@ -27,4 +29,5 @@ Only the latest commit on `main` (pre-1.0, alpha).
 ## Hardening already in place
 Strict JSON parsing, size/depth limits, restricted regexes, parameterised SQL, redaction before storage,
 loopback-only API with bearer token and Host/Origin checks, strict CSP, SSRF-guarded HTTP adapter, a
-fail-closed bubblewrap sandbox, fuzzing and mutation checks recorded in `docs/TEST_EVIDENCE.md`.
+fail-closed bubblewrap sandbox, POSIX owner-only SQLite database file permissions, fuzzing and mutation
+checks recorded in `docs/TEST_EVIDENCE.md`.

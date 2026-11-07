@@ -51,3 +51,17 @@
 - Local UI + jsdom e2e tests; fixed a fresh-DB migration race and 3 UI/API bugs found by them; tests 718 -> 744.
 - Tier B (bubblewrap) sandbox + probe-agent tests; tests 744 -> 776; two weak tests found by surviving mutations.
 - UI v2 (dashboard, routing, palette, shortcuts, theme), overview endpoint; tests 776 -> 782.
+
+
+## 2026-11-06 (local hardening continuation)
+- Current public demo scope confirmed by the owner: public hosted demo, synthetic data only. WebDev `init_project` failed twice at its `mount` step. Sandbox status, disk and CPU were checked; no supported mount-repair tool was exposed. No project, preview or deployment was created.
+- Baseline in an isolated temporary venv: 771 passed, 11 Tier B integration tests skipped, Ruff clean. Added two tests first; they reproduced SQLite's default `0644` file mode under `umask(0)` and when reopening an existing `0644` database.
+- Implemented POSIX file-backed SQLite DB creation/restriction to `0600`, rollback-journal permissions and non-blocking FIFO refusal. Final: 775 passed, 11 skipped; Ruff clean; offline `regressagent demo` exit 0.
+- Opened the existing repo demo database through `regressagent case list`; its permissions changed from `0644` to `0600`. No case or agent was run during this permission-only check.
+- Updated README, security policy, architecture, threat model, project state and handoff to describe the permission boundary honestly: plaintext, no encryption, same-user/root and unprotected backups remain outside the protection. Work is local/uncommitted; no GitHub push or public deployment.
+
+
+## 2026-11-06 (documentation reconciliation continuation)
+- Re-read WebDev workflow and available tools. The server exposes init/attach/config, but no mount-repair operation; after two prior failed initializations, did not make a blind third retry or claim a demo exists.
+- Replaced the obsolete adapter-isolation draft with current Tier A, Tier B, HTTP, config, data-egress, local-API and verification boundaries. Corrected the Tier A acknowledgement rule after checking the parser: Tier B does not require that Tier A acknowledgement.
+- Corrected D-010 implementation status and D-021/D-023 browser-testing statements; exploratory headless Chromium screenshots exist, but there is no maintained real-browser/accessibility suite. Updated the task checklist and project state. No application code changed in this documentation-only continuation.

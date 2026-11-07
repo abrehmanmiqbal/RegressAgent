@@ -191,3 +191,29 @@ NOT verified: Tier B on other distributions/kernels, with AppArmor-restricted us
 NOT verified: a real browser (rendering, CSS layout, focus rings, dark mode colours, responsive breakpoints), screen readers, automated accessibility checks; CI for the UI v2 commit (jsdom step is not in the workflow, see docs/ci-node-step.patch).
 88. Release notes made final (test-first: the packaging test now demands "alpha" and "not published on PyPI" and forbids "DRAFT" -> 1 failed, then 7 passed). CI on 169a8ab and cf31ccc: both runs completed/success (API run-level conclusion).
 89. Release: GitHub pre-release **v0.1.0** created via the API (tag on 033072a, CI green on that commit): https://github.com/abrehmanmiqbal/RegressAgent/releases/tag/v0.1.0 . Wheel and sdist were built (`twine check` PASSED) and handed to the owner as files; they are NOT attached to the release (the upload host is not reachable from the sandbox). PyPI was not touched (no credentials).
+
+
+## 2026-11-06 — POSIX SQLite database permissions
+
+- Test-first: added two POSIX-only tests for new database creation under `umask(0)` and reopening an existing mode-`0644` database. Before the fix, both failed: observed `0644` (`420`) instead of owner-only `0600` (`384`).
+- Implemented pre-open file creation/hardening in `src/regressagent/storage.py`: file-backed DBs are regular files and are set to mode `0600` on POSIX; `:memory:` databases and non-POSIX systems are unchanged. `O_NONBLOCK` prevents opening a FIFO from hanging; special files are refused.
+- Added POSIX checks for rollback-journal mode and FIFO refusal; the rollback-journal probe observed both DB and journal at `0600`.
+- Existing `/home/ubuntu/RegressAgent/regressagent.db`: `stat` showed `0644` before; `/tmp/regressagent-check/bin/regressagent case list` opened it; `stat` showed `0600` after. The command output was discarded and did not run a case or agent.
+- `/tmp/regressagent-check/bin/python -m pytest -q`: **775 passed, 11 skipped**. The 11 skips are Tier B integration checks because bubblewrap is unavailable or cannot create a sandbox in this environment.
+- `/tmp/regressagent-check/bin/ruff check .`: **All checks passed!**
+- `/tmp/regressagent-check/bin/regressagent demo`: exit 0; both deterministic assertions passed.
+- Environment: Python 3.12.3, Linux arm64. CI, Windows ACL behavior, database encryption, backup permissions and production load are **not verified**. Mode `0600` is not encryption.
+
+
+## 2026-11-07 — UI accessibility and integration verification
+
+Environment: Linux sandbox, Python 3.12.3, Node.js 22.23.4, Chromium 156.0.8078.73.
+
+1. `npm ci --no-audit --no-fund` in `ui-tests/` — succeeded from `package-lock.json`; 42 packages installed.
+2. `/tmp/regressagent-check/bin/python -m pytest -q tests/test_ui_browser.py -vv` — **1 passed**. The test runs Playwright in real Chromium against an ephemeral loopback API and temporary synthetic-data database. It asserts successful axe scans in eight states (login; overview in auto, light and dark; cases; traces; command palette; mobile viewport) with zero violations for the configured WCAG 2.0/2.1 A/AA and axe best-practice tags.
+3. `/tmp/regressagent-check/bin/python -m pytest -q` — **776 passed, 11 skipped in 39.01s** after the final CSS correction. All 11 skips are Tier B integration cases because bubblewrap is unavailable in this sandbox. The full suite includes the browser audit.
+4. `/tmp/regressagent-check/bin/ruff check .` — **All checks passed**.
+5. `/tmp/regressagent-check/bin/regressagent demo` — **exit 0**, both assertions passed.
+6. `git diff --check` — passed.
+
+The GitHub Actions workflow was updated to install Node dependencies and Chromium on the Python 3.12 job. Its result for this change is pending the requested push; no hosted demo or public deployment was created.
