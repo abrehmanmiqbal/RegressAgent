@@ -563,7 +563,9 @@ def _dispatch(args: argparse.Namespace) -> int:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     try:
-        return _dispatch(args)
+        code = _dispatch(args)
+        sys.stdout.flush()  # inside the try: a closed pipe must be handled here, not at interpreter exit
+        return code
     except (StorageError, CliError, ConfigError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
