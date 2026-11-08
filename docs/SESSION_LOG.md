@@ -73,3 +73,4 @@
 - Verified lockfile installation (`npm ci`, 42 packages); final local suite: **776 passed, 11 Tier B skips** (bubblewrap unavailable); Ruff clean; offline demo passed; `git diff --check` clean.
 - Owner-authorized source, test and documentation changes were committed as `abfa656` and pushed to `abrehmanmiqbal/RegressAgent:main`. GitHub Actions run [42357784214](https://github.com/abrehmanmiqbal/RegressAgent/actions/runs/42357784214) passed on Python 3.11 and 3.12. Local preview screenshots were intentionally excluded.
 - No public website or deployment was created. The public demo remains synthetic-data-only and blocked by the previous WebDev mount failure; the current API remains loopback-only and is not production SaaS.
+- Wrap-up: repo check, BrokenPipe fix, project site, DEPLOYMENT/PUBLISHING guides; tests 786 -> 790 (+1 skipped Chromium test).

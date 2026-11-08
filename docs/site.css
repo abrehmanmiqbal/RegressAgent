@@ -1,0 +1,19 @@
+
+:root{--bg:#f6f7fb;--fg:#12151f;--muted:#586075;--card:#fff;--line:#dde2ee;--a:#5b5bf0;--b:#8b5cf6;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0b0e17;--fg:#e8ecf6;--muted:#98a2b8;--card:#121726;--line:#262e45;--a:#8b8bff;--b:#b69cff}}
+*{box-sizing:border-box}body{margin:0;font:17px/1.65 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--fg)}
+a{color:var(--a)}main{max-width:900px;margin:0 auto;padding:0 1.2rem 3rem}section{margin-top:2.6rem}
+.top{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;padding:.9rem 1.2rem;border-bottom:1px solid var(--line);background:var(--card)}
+.top nav{display:flex;gap:1rem;flex-wrap:wrap}.top a{text-decoration:none}
+.hero{padding:3rem 0 1rem}.hero h1{font-size:clamp(1.9rem,5vw,3rem);line-height:1.15;letter-spacing:-.02em;margin:.4rem 0}
+.hero em{font-style:normal;background:linear-gradient(135deg,var(--a),var(--b));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lead{font-size:1.15rem;color:var(--muted);max-width:42rem}.badge{display:inline-block;font-size:.8rem;border:1px solid var(--line);border-radius:999px;padding:.2rem .8rem;color:var(--muted);background:var(--card)}
+.btn{display:inline-block;margin:.2rem .3rem .2rem 0;padding:.6rem 1.1rem;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);text-decoration:none;font-weight:600}
+.btn.primary{background:linear-gradient(135deg,var(--a),var(--b));color:#fff;border-color:transparent}
+h2{font-size:1.5rem;letter-spacing:-.01em}.muted{color:var(--muted)}
+.term{background:#0d1117;color:#e6edf3;padding:1rem 1.2rem;border-radius:12px;overflow:auto;font:14px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;border:1px solid var(--line)}
+code{font-family:ui-monospace,Menlo,monospace;background:var(--card);border:1px solid var(--line);padding:.05em .35em;border-radius:6px;font-size:.9em}
+.grid{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem}
+.grid li{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem}.grid h3{margin:.1rem 0 .3rem;font-size:1.05rem}.grid p{margin:0;color:var(--muted);font-size:.95rem}
+footer{border-top:1px solid var(--line);padding:1.2rem;text-align:center;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

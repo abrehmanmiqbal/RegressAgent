@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="RegressAgent: offline-first regression testing for AI agents. Catches the case where the words stay the same but the tool calls change.">
+  <meta name="color-scheme" content="light dark">
+  <title>RegressAgent: regression testing for AI agents</title>
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="top"><strong>RegressAgent</strong><nav><a href="#problem">Problem</a><a href="#try">Try it</a><a href="#security">Security</a><a href="#status">Status</a><a href="https://github.com/abrehmanmiqbal/RegressAgent">GitHub</a></nav></header>
+<main>
+<section class="hero">
+  <p class="badge">Alpha pre-release v0.1.0 · MIT · Python 3.11/3.12 · runs on your machine</p>
+  <h1>Your agent still sounds right.<br>Did it still <em>do</em> the right thing?</h1>
+  <p class="lead">RegressAgent records how your AI agent behaved, then compares before and after a change. It catches regressions that a text check misses, such as an agent that silently stops calling a tool.</p>
+  <p><a class="btn primary" href="#try">Try it in 2 minutes</a> <a class="btn" href="https://github.com/abrehmanmiqbal/RegressAgent/releases/tag/v0.1.0">Release notes</a> <a class="btn" href="https://github.com/abrehmanmiqbal/RegressAgent">Source</a></p>
+</section>
+
+<section id="problem">
+  <h2>The problem</h2>
+  <p>A support agent used to look up the order before replying. After a prompt change it skips the lookup, but still says "Your order is on its way." The wording is identical, so a normal test passes. This is the real output of the bundled demo:</p>
+  <pre class="term" aria-label="Real terminal output of regressagent compare">$ regressagent compare 1 2
+verdict: regressed
+  message                      equals           still_passing
+  steps                        tool_called      regressed
+  steps                        tool_not_called  still_passing
+  steps                        tool_order       regressed
+  steps.0.arguments.order_id   equals           still_passing
+</pre>
+  <p>The message is <code>still_passing</code>, but the tool-call assertions are <code>regressed</code>. That is the whole idea.</p>
+</section>
+
+<section>
+  <h2>What you get</h2>
+  <ul class="grid">
+    <li><h3>11 assertion operators</h3><p>Equality, regex (ReDoS-restricted), numeric, type, and tool-call checks: <code>tool_called</code>, <code>tool_not_called</code>, <code>tool_order</code>.</p></li>
+    <li><h3>Real agents</h3><p>Run a local command, the same command inside a bubblewrap sandbox, or an HTTP endpoint.</p></li>
+    <li><h3>Traces to cases</h3><p>Store traces (secrets redacted before disk) or import OpenAI and Anthropic conversations, then generate reviewable cases.</p></li>
+    <li><h3>Dashboard and CLI</h3><p>A local web UI with health tiles, compare view and a command palette, plus a scriptable CLI with exit codes.</p></li>
+    <li><h3>Offline first</h3><p>No cloud, no account, no paid API. Data stays in a local SQLite file.</p></li>
+    <li><h3>Honest evidence</h3><p>782+ tests, mutation checks, fuzzing, and a log of what was and was not verified.</p></li>
+  </ul>
+</section>
+
+<section id="try">
+  <h2>Try it</h2>
+  <p>Not on PyPI yet, so install from the source (Python 3.11 or 3.12):</p>
+  <pre class="term">git clone https://github.com/abrehmanmiqbal/RegressAgent.git
+cd RegressAgent
+python3 -m venv .venv &amp;&amp; source .venv/bin/activate
+pip install -e .
+regressagent demo
+regressagent serve      # open the "Open the UI" link it prints</pre>
+  <p class="muted">Windows: use WSL2 (not tested natively). Full instructions are in the README.</p>
+</section>
+
+<section id="security">
+  <h2>Security by default</h2>
+  <ul>
+    <li>The API and UI bind to loopback only, need a random token, and reject foreign Host/Origin headers.</li>
+    <li>Secrets are redacted before anything is written to the database.</li>
+    <li>Tier B runs your agent in a bubblewrap sandbox (no network, minimal read-only filesystem, no capabilities) and refuses to run unsandboxed if it cannot build one.</li>
+    <li>The HTTP adapter has an SSRF guard, pinned connections, no redirects and verified TLS.</li>
+  </ul>
+  <p>Tier A (plain command) is <strong>not a sandbox</strong>. See the threat model for what is and is not covered.</p>
+</section>
+
+<section id="status">
+  <h2>Honest status</h2>
+  <ul>
+    <li>Alpha. Developed and tested on Linux; macOS and Windows are untested.</li>
+    <li>The UI is tested with a simulated DOM and (in the repo's browser test) Chromium on machines that have it. It had not been opened in a real browser by its author when v0.1.0 was cut.</li>
+    <li>Importers were tested on hand-written conversations, not real exports.</li>
+    <li>Built with AI assistance; every claim above is backed by a test or a recorded command in the repo.</li>
+  </ul>
+</section>
+</main>
+<footer><p>MIT licensed · <a href="https://github.com/abrehmanmiqbal/RegressAgent">github.com/abrehmanmiqbal/RegressAgent</a></p></footer>
+</body>
+</html>

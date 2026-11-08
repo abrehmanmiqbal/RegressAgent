@@ -10,6 +10,9 @@ Early development (alpha). Implemented, tested locally on Linux and in CI (Pytho
 
 ## Install
 
+Project site (free, GitHub Pages): <https://abrehmanmiqbal.github.io/RegressAgent/> once Pages is enabled (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)). Publishing to PyPI: [docs/PUBLISHING.md](docs/PUBLISHING.md).
+
+
 Requires Python 3.11 or newer. RegressAgent (formerly called AgentProof) is **not published on PyPI**: install from a clone of this repository. **Do not run `pip install agentproof`**: that is a different project by someone else (see [D-013](docs/DECISIONS.md) and [D-016](docs/DECISIONS.md)).
 
 ```bash

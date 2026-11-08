@@ -567,6 +567,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (StorageError, CliError, ConfigError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    except BrokenPipeError:
+        # The reader (for example `| head`) closed early: stop quietly, and keep the interpreter's
+        # final flush of stdout from printing a second error (standard Python recipe).
+        try:
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        except (OSError, ValueError, AttributeError):
+            pass
+        return 0
 
 
 if __name__ == "__main__":
