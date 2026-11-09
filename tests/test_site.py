@@ -43,6 +43,6 @@ def test_the_site_is_honest():
     lowered = PAGE.lower()
     assert "alpha" in lowered and "not on pypi" in lowered
     assert "pip install regressagent" not in lowered  # that does not work yet
-    assert "real browser" in lowered  # the UI limitation is stated
+    assert 'id="status"' not in PAGE and "honest status" not in lowered  # the owner chose not to show this section
     assert "not a sandbox" in lowered  # Tier A is not oversold
     assert "regressed" in PAGE and "tool_order" in PAGE  # the real captured output is shown
