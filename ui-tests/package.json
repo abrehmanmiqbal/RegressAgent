@@ -4,7 +4,7 @@
   "description": "jsdom end-to-end and Chromium accessibility tests for the local UI (run through pytest)",
   "type": "module",
   "devDependencies": {
-    "axe-core": "4.14.0",
+    "axe-core": "4.14.1",
     "jsdom": "26.1.0",
     "playwright": "1.65.0"
   }
